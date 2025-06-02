@@ -94,7 +94,5 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-df = pd.read_csv(
-    "https://raw.githubusercontent.com/mcnakhaee/palmerpenguins/master/palmerpenguins/data/penguins.csv"
-)
+df = pd.read_parquet("synthetic_benchmarks_all-devices_all.parquet")
 st.dataframe(filter_dataframe(df))
