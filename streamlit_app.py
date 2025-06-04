@@ -1,5 +1,5 @@
 import pandas as pd
-import streamlit as st
+import streamlit as st # type: ignore
 import configparser
 from pandas.api.types import (
     is_datetime64_any_dtype,
@@ -27,7 +27,7 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int) -> pd.DataFrame:
                 likely_dates = all(isinstance(s, str) and (len(s) >= 8 and ('/' in s or '-' in s or ':' in s)) for s in sample)
                 
                 if likely_dates:
-                    temp_series = pd.to_datetime(df_copy[col], errors='coerce')
+                    temp_series = pd.to_datetime(df_copy[col], errors='coerce', format="%d/%m/%Y")
                     # Only convert if most values successfully parsed
                     if temp_series.notna().sum() > 0.5 * df_copy[col].count():
                         df_copy[col] = temp_series
