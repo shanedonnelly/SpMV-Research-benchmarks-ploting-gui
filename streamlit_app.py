@@ -6,6 +6,7 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_object_dtype,
     is_integer_dtype,
+    is_float_dtype
 )
 
 st.title("Auto Filter Dataframes in Streamlit")
@@ -65,9 +66,17 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int) -> pd.DataFrame:
             
             # Categorical or low-cardinality columns
             is_categorical = isinstance(filtered_df[column].dtype, pd.CategoricalDtype)
-            is_low_cardinality = not filtered_df[column].empty and filtered_df[column].nunique() < max_unique
+            # …
+
+            is_low_cardinality = (
+                not filtered_df[column].empty
+                and filtered_df[column].nunique() < max_unique
+                and not is_float_dtype(filtered_df[column])
+                and not is_integer_dtype(filtered_df[column])
+            )
             
             if is_categorical or is_low_cardinality:
+            # if is_categorical :
                 unique_values = filtered_df[column].unique()
                 filter_container = right.container()
                 col1, col2 = filter_container.columns([10, 1])
