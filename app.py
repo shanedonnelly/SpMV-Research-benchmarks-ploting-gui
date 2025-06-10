@@ -82,15 +82,29 @@ def find_next_subset_index(base_name):
     else:
         return 1
 
+# Get default subset name without extension
+def get_default_subset_name(original_name):
+    base_name = original_name.split('.')[0]
+    next_index = find_next_subset_index(base_name)
+    return f"{base_name}_{next_index}"
+
 # Save dataframe as subset
-def save_subset(df, original_name):
+def save_subset(df, original_name, custom_name=None):
     # Ensure subset_pickle directory exists
     if not os.path.exists('subset_pickle'):
         os.makedirs('subset_pickle')
-        
-    base_name = original_name.split('.')[0]
-    next_index = find_next_subset_index(base_name)
-    new_file_name = f"{base_name}_{next_index}.pkl"
+    
+    if custom_name:
+        # Use custom name but ensure it has .pkl extension
+        if not custom_name.endswith('.pkl'):
+            new_file_name = f"{custom_name}.pkl"
+        else:
+            new_file_name = custom_name
+    else:
+        # Use default naming convention
+        base_name = original_name.split('.')[0]
+        next_index = find_next_subset_index(base_name)
+        new_file_name = f"{base_name}_{next_index}.pkl"
     
     try:
         df.to_pickle(f"subset_pickle/{new_file_name}")
@@ -169,15 +183,31 @@ def show_data_filtering():
             show_df_by_default=config_data['show_df_by_default']
         )
     
-    # Save subset button
-    # Center the Save Subset button under the filter component
+    # Save subset section
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-    if st.button("Save Subset", key="save_subset_button", use_container_width=False):
-        success, result = save_subset(filtered_df, st.session_state.selected_df_file)
-        if success:
-            st.success(f"Saved as {result}")
-        else:
-            st.error(f"Error saving subset: {result}")
+    
+    # Create a popover for save subset functionality
+    with st.popover("Save Subset", use_container_width=False):
+        st.subheader("Save Filtered DataFrame")
+        
+        # Get default name for the subset
+        default_name = get_default_subset_name(st.session_state.selected_df_file)
+        
+        # Text input with default name (auto-selected)
+        subset_name = st.text_input(
+            "Enter a name for this subset:",
+            value=default_name,
+            key="subset_name_input"
+        )
+        
+        # Save button
+        if st.button("Save", key="save_confirm_button"):
+            success, result = save_subset(filtered_df, st.session_state.selected_df_file, subset_name)
+            if success:
+                st.success(f"Saved as {result}")
+            else:
+                st.error(f"Error saving subset: {result}")
+    
     st.markdown("</div>", unsafe_allow_html=True)
 
 
