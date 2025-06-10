@@ -56,3 +56,4 @@ Page disposal :
 Do not create a column or any kind of space-taking component for switching pags, make the switch of the pages at the very top, like a web navigator kind of page selector, very simple. 
 
 Overall : do not invent anything i didnt say, do not add smiley. 
+
