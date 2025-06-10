@@ -1,5 +1,5 @@
 import pandas as pd
-import streamlit as st # type: ignore
+import streamlit as st
 from pandas.api.types import (
     is_datetime64_any_dtype,
     is_numeric_dtype,
@@ -177,63 +177,112 @@ def _handle_datetime_filter(df_col: pd.Series, col_name: str, container: st.cont
     reset_key = f"{col_name}_reset_flag"
     pending_key = f"{col_name}_pending_changes"
     range_key = f"{col_name}_date_range"
+    applied_range_key = f"{col_name}_applied_date_range" # New key for applied value
+    expanded_key = f"{col_name}_date_expanded"
 
     min_date_orig, max_date_orig = df_col.min().date(), df_col.max().date()
     if range_key not in st.session_state:
         st.session_state[range_key] = (min_date_orig, max_date_orig)
+        st.session_state[applied_range_key] = (min_date_orig, max_date_orig) # Initialize applied
+    if expanded_key not in st.session_state:
+        st.session_state[expanded_key] = True
 
     if st.session_state[reset_key]:
         st.session_state[range_key] = (min_date_orig, max_date_orig)
+        st.session_state[applied_range_key] = (min_date_orig, max_date_orig) # Reset applied
         if col_name in st.session_state.filters_applied: del st.session_state.filters_applied[col_name]
         st.session_state[pending_key] = False
         st.session_state[reset_key] = False
+    
+    with container.expander("Filter details", expanded=st.session_state[expanded_key]):
+        current_range_in_widget = st.session_state[range_key]
+        new_range_in_widget = st.date_input(f"Values for {col_name}", current_range_in_widget, min_date_orig, max_date_orig, key=f"{col_name}_date_in")
+        if len(new_range_in_widget) == 2 and new_range_in_widget != current_range_in_widget:
+            st.session_state[range_key] = new_range_in_widget
+            st.session_state[pending_key] = True
+            # st.rerun() # Removed auto-rerun
 
-    date_cols = container.columns([9, 1, 1])
-    current_range = st.session_state[range_key]
-    new_range = date_cols[0].date_input(f"Values for {col_name}", current_range, min_date_orig, max_date_orig, key=f"{col_name}_date_in")
-    if len(new_range) == 2 and new_range != current_range:
-        st.session_state[range_key] = new_range
-        st.session_state[pending_key] = True; st.rerun()
-
-    ok_label = "OK" # Text remains OK
-    button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"
-    if date_cols[1].button(ok_label, key=f"{col_name}_ok_date", type=button_type):
-        st.session_state.filters_applied[col_name] = True
-        st.session_state[pending_key] = False; st.rerun()
-    if date_cols[2].button("↺", key=f"{col_name}_reset_date_btn"):
-        st.session_state[reset_key] = True; st.rerun()
+        action_button_cols = st.columns([1,1,8])
+        button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"
+        if action_button_cols[0].button("OK", key=f"{col_name}_ok_date", type=button_type):
+            st.session_state[applied_range_key] = st.session_state[range_key] # Commit current widget value
+            st.session_state.filters_applied[col_name] = True
+            st.session_state[pending_key] = False; st.rerun()
+        if action_button_cols[1].button("↺", key=f"{col_name}_reset_date_btn"):
+            st.session_state[reset_key] = True; st.rerun()
 
 # Helper function for text filters
-def _handle_text_filter(df_col: pd.Series, col_name: str, container: st.container):
+def _handle_text_filter(col_name: str, container: st.container):
     reset_key = f"{col_name}_reset_flag"
     pending_key = f"{col_name}_pending_changes"
     text_filter_key = f"{col_name}_text_filter"
+    applied_text_filter_key = f"{col_name}_applied_text_filter" # New key for applied value
+    expanded_key = f"{col_name}_text_expanded"
 
-    if text_filter_key not in st.session_state: st.session_state[text_filter_key] = ""
+    if text_filter_key not in st.session_state: 
+        st.session_state[text_filter_key] = ""
+        st.session_state[applied_text_filter_key] = "" # Initialize applied
+    if expanded_key not in st.session_state: st.session_state[expanded_key] = True
 
     if st.session_state[reset_key]:
         st.session_state[text_filter_key] = ""
+        st.session_state[applied_text_filter_key] = "" # Reset applied
         if col_name in st.session_state.filters_applied: del st.session_state.filters_applied[col_name]
         st.session_state[pending_key] = False
         st.session_state[reset_key] = False
 
-    text_cols = container.columns([9, 1, 1])
-    current_text = st.session_state[text_filter_key]
-    new_text = text_cols[0].text_input(f"Substring or regex in {col_name}", current_text, key=f"{col_name}_text_in")
-    if new_text != current_text:
-        st.session_state[text_filter_key] = new_text
-        st.session_state[pending_key] = True; st.rerun()
+    with container.expander("Filter details", expanded=st.session_state[expanded_key]):
+        current_text_in_widget = st.session_state[text_filter_key]
+        new_text_in_widget = st.text_input(f"Substring or regex in {col_name}", current_text_in_widget, key=f"{col_name}_text_in")
+        if new_text_in_widget != current_text_in_widget:
+            st.session_state[text_filter_key] = new_text_in_widget
+            st.session_state[pending_key] = True
+            # st.rerun() # Removed auto-rerun
 
-    ok_label = "OK" # Text remains OK
-    button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"
-    if text_cols[1].button(ok_label, key=f"{col_name}_ok_text", type=button_type):
-        st.session_state.filters_applied[col_name] = True
-        st.session_state[pending_key] = False; st.rerun()
-    if text_cols[2].button("↺", key=f"{col_name}_reset_text_btn"):
-        st.session_state[reset_key] = True; st.rerun()
+        action_button_cols = st.columns([1,1,8])
+        button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"
+        if action_button_cols[0].button("OK", key=f"{col_name}_ok_text", type=button_type):
+            st.session_state[applied_text_filter_key] = st.session_state[text_filter_key] # Commit current widget value
+            st.session_state.filters_applied[col_name] = True
+            st.session_state[pending_key] = False; st.rerun()
+        if action_button_cols[1].button("↺", key=f"{col_name}_reset_text_btn"):
+            st.session_state[reset_key] = True; st.rerun()
 
 def filter_dataframe(df: pd.DataFrame, max_unique: int = 20, show_df_by_default: bool = True) -> pd.DataFrame:
-    """Adds a UI to filter dataframe columns"""
+    """
+    Creates an interactive UI to filter a pandas DataFrame on multiple columns simultaneously.
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        The pandas DataFrame to be filtered. For optimal performance, it's recommended to preprocess
+        the DataFrame beforehand, especially for type conversions (e.g., converting string dates to datetime).
+    
+    max_unique : int, default=20
+        The maximum number of unique values for a column to be considered "low cardinality".
+        Columns with unique values less than this threshold will be presented with checkbox filters.
+        Otherwise, they will be filtered using text input.
+    
+    show_df_by_default : bool, default=True
+        Whether to display the filtered DataFrame by default. When set to False, 
+        users can toggle visibility using a checkbox.
+    
+    Returns:
+    --------
+    pd.DataFrame
+        The filtered DataFrame based on the selections made in the UI.
+    
+    Notes:
+    ------
+    - Numeric columns are filtered using range sliders and min/max/unique inputs
+    - Datetime columns use date pickers for range filtering
+    - Low cardinality categorical columns use checkboxes with search functionality
+    - High cardinality columns use text input with substring matching
+    
+    For best usage:
+    - Convert string dates to pd.datetime before passing to the function
+    - Try not filtering on columns with a lot on NaN values
+    """
     _init_session_state()
     
     # Initialize show_df state with the passed parameter
@@ -289,25 +338,27 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 20, show_df_by_default:
             elif is_datetime64_any_dtype(df_column_series):
                 _handle_datetime_filter(df_column_series, column, right)
             else:  # Default to text input for other types (likely objects with high cardinality)
-                _handle_text_filter(df_column_series, column, right)
+                _handle_text_filter(column, right)
             
             # Apply filter to intermediate_filtered_df if "OK"/"Apply" was pressed for this column
             if column in st.session_state.filters_applied and st.session_state.filters_applied[column]:
                 if is_categorical_type or is_low_cardinality_obj or \
                    (df_column_series.nunique() < max_unique and not is_numeric_dtype(df_column_series) and not is_datetime64_any_dtype(df_column_series)):
-                    selected_vals = st.session_state.get(f"{column}_selected_values", [])
+                    selected_vals = st.session_state.get(f"{column}_selected_values", []) # Assuming categorical handles this internally or needs similar adjustment if issues arise
                     intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].isin(selected_vals)]
                 elif is_numeric_dtype(df_column_series):
-                    min_val = st.session_state.get(f"{column}_filter_min", df_column_series.min())
+                    min_val = st.session_state.get(f"{column}_filter_min", df_column_series.min()) # Assuming numeric handles this internally or needs similar adjustment if issues arise
                     max_val = st.session_state.get(f"{column}_filter_max", df_column_series.max())
                     intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].between(min_val, max_val)]
                 elif is_datetime64_any_dtype(df_column_series):
-                    date_range = st.session_state.get(f"{column}_date_range")
-                    if date_range and len(date_range) == 2:
-                        start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+                    # Use the applied date range
+                    date_range_to_apply = st.session_state.get(f"{column}_applied_date_range")
+                    if date_range_to_apply and len(date_range_to_apply) == 2:
+                        start_date, end_date = pd.to_datetime(date_range_to_apply[0]), pd.to_datetime(date_range_to_apply[1])
                         intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].between(start_date, end_date)]
                 else: # Text
-                    text_to_apply = st.session_state.get(f"{column}_text_filter", "")
+                    # Use the applied text filter
+                    text_to_apply = st.session_state.get(f"{column}_applied_text_filter", "")
                     if text_to_apply:
                         intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].astype(str).str.contains(text_to_apply, case=False, na=False)]
         
