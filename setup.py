@@ -10,7 +10,7 @@ def create_config():
     # Add sections and key-value pairs
     config['General'] = {
         'max_unique': 20,
-        'show_df_by_default': 'True'
+        'show_df_by_default': 'False'
     }
 
     # Write the configuration to a file
