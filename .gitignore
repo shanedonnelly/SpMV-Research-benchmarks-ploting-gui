@@ -1,4 +1,6 @@
 *.csv
+*.pkl
+*.parquet
 old.py
 *.pdf
 TODO.txt
