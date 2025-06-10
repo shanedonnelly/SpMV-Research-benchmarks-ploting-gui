@@ -1,0 +1,11 @@
+/home/ubuntu/Documents/stage/lab/project_2/st-filter-dataframe/
+├── app.py                   # Nouvelle application principale Streamlit
+├── filter_component.py      # Le composant de filtrage réutilisable
+├── setup.py                 # Script de configuration initiale
+├── config.ini               # Fichier de configuration (créé par setup.py)
+├── requirements.txt         # (Supposé exister pour les dépendances)
+├── csv/                     # Dossier pour les fichiers CSV sources
+│   └── (vos fichiers .csv)
+├── pickle/                  # Dossier pour les fichiers Pickle (créés par setup.py et app.py)
+│   └── (vos fichiers .pkl)
+└── streamlit_app.py         # Ancien point d'entrée, maintenant un test pour filter_component
