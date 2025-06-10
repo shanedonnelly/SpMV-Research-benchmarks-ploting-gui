@@ -237,38 +237,12 @@ def _handle_text_filter(df_col: pd.Series, col_name: str, container: st.containe
         st.session_state[reset_key] = True; st.rerun()
 
 
-def filter_dataframe(df: pd.DataFrame, max_unique: int) -> pd.DataFrame:
+def filter_dataframe(df: pd.DataFrame, max_unique: int = 20) -> pd.DataFrame:
     """Adds a UI to filter dataframe columns"""
     df_copy = df.copy()
     
     # Apply CSS for button width globally for this UI section
     st.markdown("""<style> div[data-testid="stButton"] > button { min-width: 48px; } </style>""", unsafe_allow_html=True)
-
-
-    # Convert date-like object columns to datetime
-    for col in df_copy.columns:
-        if is_object_dtype(df_copy[col]):
-            try:
-                sample = df_copy[col].dropna().iloc[:10] if not df_copy[col].empty else []
-                # Basic check for date-like strings
-                likely_dates = all(isinstance(s, str) and (len(s) >= 8 and ('/' in s or '-' in s or ':' in s)) for s in sample)
-                if likely_dates: # Attempt conversion if sample suggests dates
-                    # Try specific format first to avoid UserWarning
-                    temp_series = pd.to_datetime(df_copy[col], format="%d/%m/%Y", errors='coerce')
-                    # If most values are NaT with specific format, try inferring
-                    if temp_series.isna().sum() > 0.8 * len(df_copy[col].dropna()): # Heuristic: if >80% failed
-                        temp_series_inferred = pd.to_datetime(df_copy[col], errors='coerce',format="%d/%m/%Y" )
-                        # Use inferred if it results in more non-NaT values
-                        if temp_series_inferred.notna().sum() > temp_series.notna().sum():
-                            temp_series = temp_series_inferred
-                    
-                    # If a significant portion converted successfully, apply it
-                    if temp_series.notna().sum() > 0.5 * df_copy[col].count():
-                        df_copy[col] = temp_series
-            except Exception: # Broad exception to catch any parsing/conversion errors
-                pass # If conversion fails, leave column as is
-        if is_datetime64_any_dtype(df_copy[col]): # Ensure timezone is naive
-            df_copy[col] = df_copy[col].dt.tz_localize(None)
 
     with st.container():
         to_filter_columns = st.multiselect("Filter dataframe on", df_copy.columns, default=list(st.session_state.previous_columns))
