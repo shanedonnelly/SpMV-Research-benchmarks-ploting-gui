@@ -5,6 +5,8 @@ import os
 import io
 import zipfile
 import numpy as np
+import matplotlib.colors as mcolors # type: ignore
+from matplotlib.patches import Patch # type: ignore
 
 def check_columns_match(dataframes):
     """
@@ -46,6 +48,23 @@ def bin_numerical_data(df, column, n_bins=4):
     
     return binned_column
 
+def get_pastel_colors(n):
+    """
+    Generate a list of pastel colors for the plots
+    """
+    base_colors = list(mcolors.TABLEAU_COLORS.values())
+    # Make colors more pastel by mixing with white
+    pastel_colors = []
+    
+    for i in range(n):
+        color_idx = i % len(base_colors)
+        base_color = np.array(mcolors.to_rgb(base_colors[color_idx]))
+        # Mix with white (0.6 base color, 0.4 white)
+        pastel_color = 0.65 * base_color + 0.35 * np.array([1, 1, 1])
+        pastel_colors.append(tuple(pastel_color))
+    
+    return pastel_colors
+
 def render_plotting_component(dataframes, filenames):
     """
     Render the plotting component with controls and visualization
@@ -71,140 +90,367 @@ def render_plotting_component(dataframes, filenames):
         if st.button("↺", key="reset_plots"):
             st.session_state.plots_generated = False
             # Clear other selections
-            if "group_by_cols" in st.session_state:
-                del st.session_state.group_by_cols
+            if "primary_dim" in st.session_state:
+                del st.session_state.primary_dim
+            if "secondary_dim" in st.session_state:
+                del st.session_state.secondary_dim
             if "y_axis" in st.session_state:
                 del st.session_state.y_axis
             if "show_titles" in st.session_state:
                 del st.session_state.show_titles
-            if "plot_params" in st.session_state:  # Ensure plot_params is cleared
+            if "comparison_mode" in st.session_state:
+                del st.session_state.comparison_mode
+            if "plot_params" in st.session_state:
                 del st.session_state.plot_params
             st.rerun()
     
     # Get column names from first dataframe
     columns = list(dataframes[0].columns)
     
-    # Rest of controls...
+    # Plot type (disabled for now as we only support boxplots)
     st.selectbox("Plot Type", ["Boxplot"], key="plot_mode", disabled=True)
     
+    # Replace multiselect with separate primary and secondary dimension selectors
     col1, col2 = st.columns(2)
     with col1:
-        group_by_cols = st.multiselect("Group by", columns, key="group_by_cols")
+        primary_dim = st.selectbox("Primary Dimension", columns, key="primary_dim", 
+                                 help="First dimension for grouping (required)")
     with col2:
-        default_y = "gflops" if "gflops" in columns else columns[0]
-        y_axis = st.selectbox("Y-axis", columns, 
-                             index=columns.index(default_y) if default_y in columns else 0, 
-                             key="y_axis")
+        # None option for secondary dimension
+        secondary_options = ["None"] + columns
+        secondary_dim = st.selectbox("Secondary Dimension", secondary_options, key="secondary_dim",
+                                   help="Second dimension for coloring (optional)")
+    
+    # Y-axis selection in its own row
+    default_y = "gflops" if "gflops" in columns else columns[0]
+    y_axis = st.selectbox("Y-axis", columns, 
+                         index=columns.index(default_y) if default_y in columns else 0, 
+                         key="y_axis")
+    
+    # Comparison mode selection
+    comparison_mode = st.selectbox("Comparison Mode",["Separate","Side by Side"], 
+                                 key="comparison_mode",
+                                 help="Side by Side: traditional layout. Separate: overlapping boxplots")
     
     # Add title checkbox
-    show_titles = st.checkbox("add subset name as title", value=False, key="show_titles")
+    show_titles = st.checkbox("Add subset name as title", value=False, key="show_titles")
     
     # Generate plot button
     if st.button("Generate Plot", key="generate_plot"):
-        if not group_by_cols:
-            st.warning("Please select at least one column to group by")
-            return
+        # Convert secondary_dim to None if "None" is selected
+        secondary_dimension = None if secondary_dim == "None" else secondary_dim
+        
+        # Build list of group by dimensions
+        group_by_cols = [primary_dim]
+        if secondary_dimension:
+            group_by_cols.append(secondary_dimension)
         
         st.session_state.plots_generated = True
-        st.session_state.plot_params = { # plot_params is set here
+        st.session_state.plot_params = {
             'dataframes': dataframes,
             'filenames': filenames,
-            'group_by_cols': group_by_cols,
+            'primary_dim': primary_dim,
+            'secondary_dim': secondary_dimension,
             'y_axis': y_axis,
-            'show_titles': show_titles
+            'show_titles': show_titles,
+            'comparison_mode': comparison_mode
         }
     
     # Show plots if they've been generated
     if st.session_state.plots_generated:
         generate_individual_boxplots(**st.session_state.plot_params)
 
-def generate_individual_boxplots(dataframes, filenames, group_by_cols, y_axis, show_titles=False):
+def generate_individual_boxplots(dataframes, filenames, primary_dim, secondary_dim, y_axis, show_titles=False, comparison_mode="Side by Side"):
     """
     Generate separate boxplots for each dataframe
     """
     plot_buffers = []
-    
-    # Check if we need to create zip file
     need_zip = len(dataframes) > 1
     
-    for i, (df, filename) in enumerate(zip(dataframes, filenames)):
+    for file_idx, (df, filename) in enumerate(zip(dataframes, filenames)):
         st.markdown(f"### {os.path.splitext(filename)[0]}")
         
-        fig, ax = plt.subplots()
+        # Preprocess data
+        modified_df = preprocess_data(df, primary_dim, secondary_dim)
         
-        # Handle numerical columns that may have too many unique values
-        modified_df = df.copy()
-        numerical_warning_shown = False
+        try:
+            # Create appropriate plot based on mode
+            if comparison_mode == "Side by Side":
+                fig = create_side_by_side_plot(modified_df, primary_dim, secondary_dim, y_axis, show_titles, filename)
+            else:  # Separate mode
+                fig = create_stacked_plots(modified_df, primary_dim, secondary_dim, y_axis, show_titles, filename)
+            
+            # Display the plot
+            st.pyplot(fig)
+            
+            # Create download buffer
+            buffer = save_plot_to_buffer(fig)
+            plot_buffers.append((buffer, os.path.splitext(filename)[0] + '.png'))
+            
+            # Individual download button
+            st.download_button(
+                label=f"download : {os.path.splitext(filename)[0]}",
+                data=buffer,
+                file_name=f"{os.path.splitext(filename)[0]}_plot.png",
+                mime="image/png",
+                key=f"download_plot_{file_idx}"
+            )
         
-        for col in group_by_cols:
-            if is_numerical_column(df, col) and df[col].nunique() > 10:  # Too many unique values for boxplot
-                if not numerical_warning_shown:
-                    st.warning("Numerical column with many unique values detected. Binning into groups (not fully implemented).")
-                    numerical_warning_shown = True
-                
-                # Create a binned version of the numerical column
-                modified_df[col] = bin_numerical_data(df, col)
+        except Exception as e:
+            st.error(f"Error generating plot: {str(e)}")
+    
+    # Add zip download option if multiple plots
+    if need_zip and plot_buffers:
+        create_zip_download(plot_buffers)
+
+def preprocess_data(df, primary_dim, secondary_dim):
+    """Process data for visualization, handling numerical columns"""
+    modified_df = df.copy()
+    numerical_warning_shown = False
+    
+    # Process primary dimension if numerical with many unique values
+    if is_numerical_column(df, primary_dim) and df[primary_dim].nunique() > 10:
+        if not numerical_warning_shown:
+            st.warning("Numerical column with many unique values detected. Binning into groups (not fully implemented).")
+            numerical_warning_shown = True
+        modified_df[primary_dim] = bin_numerical_data(df, primary_dim)
+    
+    # Process secondary dimension if it exists and is numerical with many unique values
+    if secondary_dim and is_numerical_column(df, secondary_dim) and df[secondary_dim].nunique() > 10:
+        if not numerical_warning_shown:
+            st.warning("Numerical column with many unique values detected. Binning into groups (not fully implemented).")
+        modified_df[secondary_dim] = bin_numerical_data(df, secondary_dim)
+    
+    return modified_df
+
+def try_numeric_sort(values):
+    """
+    Try to sort values in a natural order, handling numeric ranges in strings
+    For strings like '[2-4]', '[4-8]', will sort by the first number
+    """
+    def extract_sort_key(val):
+        # Convert to string to handle all types
+        val_str = str(val)
         
-        # Prepare data for boxplot
+        # Try to extract first number from string (e.g., from "[2-4]" extract 2)
+        import re
+        numbers = re.findall(r'[-+]?\d+\.?\d*', val_str)
+        if numbers:
+            return float(numbers[0])
+        
+        # If no numbers, return string for lexicographical sort
+        return val_str
+    
+    try:
+        return sorted(values, key=extract_sort_key)
+    except Exception:
+        # Fallback to normal sorting
+        return sorted(values)
+
+def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles, filename):
+    """Create side-by-side boxplot visualization"""
+    # Augmenter la résolution de 150 à 300 DPI
+    fig, ax = plt.subplots(figsize=(12, 8), dpi=300)
+    
+    if secondary_dim:
+        # Create grouped boxplots colored by secondary dimension
+        # Sort the unique values for both dimensions
+        primary_values = try_numeric_sort(df[primary_dim].unique())
+        secondary_values = try_numeric_sort(df[secondary_dim].unique())
+        colors = get_pastel_colors(len(secondary_values))
+        
+        # Calculate positions and collect data
+        positions = []
+        data = []
+        box_indices = {}  # Map to track box indices
+        
+        for i, prim_val in enumerate(primary_values):
+            for j, sec_val in enumerate(secondary_values):
+                subset = df[(df[primary_dim] == prim_val) & (df[secondary_dim] == sec_val)]
+                if not subset.empty:
+                    pos = i + j * 0.25
+                    positions.append(pos)
+                    data.append(subset[y_axis].values)
+                    box_indices[(i, j)] = len(positions) - 1
+        
+        # Create boxplot
+        bp = ax.boxplot(data, positions=positions, patch_artist=True, 
+                       labels=[""] * len(positions), widths=0.15)
+        
+        # Set primary dimension tick positions and labels
+        ax.set_xticks([i + 0.125 * (len(secondary_values) - 1) for i in range(len(primary_values))])
+        ax.set_xticklabels(primary_values)
+        
+        # Color boxes by secondary dimension
+        for j, sec_val in enumerate(secondary_values):
+            for i, prim_val in enumerate(primary_values):
+                if (i, j) in box_indices:
+                    idx = box_indices[(i, j)]
+                    bp['boxes'][idx].set_facecolor(colors[j])
+        
+        # Add legend - standard format with consistent placement in upper right
+        legend_elements = [
+            Patch(facecolor=colors[j], edgecolor='black', label=str(sec_val))
+            for j, sec_val in enumerate(secondary_values)
+        ]
+        ax.legend(handles=legend_elements, title=secondary_dim, loc='upper right')
+        
+    else:
+        # Simple boxplot with primary dimension only
+        # Sort primary values
+        primary_values = try_numeric_sort(df[primary_dim].unique())
         grouped_data = []
         labels = []
         
-        # Group the data and collect values for boxplot
-        for name, group in modified_df.groupby(group_by_cols, observed=False):
-            if isinstance(name, tuple):
-                # Better formatting for combination values
-                label = ' + '.join(str(x) for x in name)
-            else:
-                label = str(name)
-            
+        for prim_val in primary_values:
+            group = df[df[primary_dim] == prim_val]
             grouped_data.append(group[y_axis].values)
-            labels.append(label)
+            labels.append(str(prim_val))
         
         # Create boxplot
-        ax.boxplot(grouped_data, labels=labels, patch_artist=True)
+        bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True)
         
-        # Customize plot
-        if show_titles:
-            ax.set_title(os.path.splitext(filename)[0])
-        ax.set_ylabel(y_axis)
-        ax.set_xlabel(' & '.join(group_by_cols))
-        
-        # Rotate x-axis labels if needed
-        if len(labels) > 3 or any(len(str(label)) > 10 for label in labels):
-            ax.set_xticklabels(labels, rotation=45, ha='right')
-        
-        plt.tight_layout()
-        
-        # Display the plot
-        st.pyplot(fig)
-        
-        # Create buffer for this plot
-        buffer = io.BytesIO()
-        fig.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
-        buffer.seek(0)
-        plot_buffers.append((buffer, os.path.splitext(filename)[0] + '.png'))
-        
-        # Individual download button
-        st.download_button(
-            label=f"download : {os.path.splitext(filename)[0]}",
-            data=buffer,
-            file_name=f"{os.path.splitext(filename)[0]}_plot.png",
-            mime="image/png",
-            key=f"download_plot_{i}"
-        )
+        # Set consistent colors
+        colors = get_pastel_colors(len(labels))
+        for i, box in enumerate(bp['boxes']):
+            box.set_facecolor(colors[i % len(colors)])
     
-    # Add zip download option if multiple plots
-    if need_zip:
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'a', zipfile.ZIP_DEFLATED) as zip_file:
-            for buffer, name in plot_buffers:
-                zip_file.writestr(name, buffer.getvalue())
+    # Customize plot
+    if show_titles:
+        ax.set_title(os.path.splitext(filename)[0], fontsize=14)
+    ax.set_ylabel(y_axis, fontsize=12)
+    ax.set_xlabel(primary_dim, fontsize=12)
+    
+    # Rotate x-axis labels if needed
+    if len(ax.get_xticklabels()) > 3 or any(len(str(label.get_text())) > 10 for label in ax.get_xticklabels()):
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    
+    plt.tight_layout()
+    return fig
+
+def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, filename):
+    """Create stacked subplot visualization with each secondary value in its own subplot"""
+    if not secondary_dim:
+        # No secondary dimension, just create a regular boxplot
+        return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, filename)
+    
+    # Get unique values for each dimension and sort them
+    primary_values = try_numeric_sort(df[primary_dim].unique())
+    secondary_values = try_numeric_sort(df[secondary_dim].unique())
+    n_subplots = len(secondary_values)
+    
+    # Create a figure with vertically stacked subplots
+    fig, axes = plt.subplots(n_subplots, 1, figsize=(12, 3*n_subplots), dpi=300, 
+                             sharex=True)
+    
+    # Handle case with only one subplot
+    if n_subplots == 1:
+        axes = [axes]
+    
+    # Colors for each subplot
+    colors = get_pastel_colors(n_subplots)
+    
+    # Remove the shared y-limits calculation - each subplot will use its own limits
+    
+    # Create boxplots for each secondary dimension value
+    for idx, (sec_val, color) in enumerate(zip(secondary_values, colors)):
+        ax = axes[idx]
         
-        zip_buffer.seek(0)
-        st.download_button(
-            label="download all",
-            data=zip_buffer,
-            file_name="all_plots.zip",
-            mime="application/zip",
-            key="download_all_plots"
-        )
+        # Filter data for this secondary value
+        sec_df = df[df[secondary_dim] == sec_val]
+        
+        # Only proceed if we have data for this combination
+        if not sec_df.empty:
+            # Group by primary dimension
+            grouped_data = []
+            labels = []
+            
+            # Ensure we have entries for all primary values (for consistent x-axis)
+            for prim_val in primary_values:
+                group = sec_df[sec_df[primary_dim] == prim_val]
+                if not group.empty:
+                    grouped_data.append(group[y_axis].values)
+                    labels.append(str(prim_val))
+                else:
+                    # Add empty placeholder for missing combinations
+                    grouped_data.append([])
+                    labels.append(str(prim_val))
+            
+            # Create boxplot
+            bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True)
+            
+            # Color the boxes
+            for box in bp['boxes']:
+                box.set_facecolor(color)
+            
+            # Set y-axis limits based on this subplot's data only
+            if not sec_df.empty:
+                y_min = sec_df[y_axis].min()
+                y_max = sec_df[y_axis].max()
+                padding = (y_max - y_min) * 0.05 if y_max > y_min else y_max * 0.05
+                ax.set_ylim(y_min - padding, y_max + padding)
+        
+        # Set y-axis label
+        ax.set_ylabel(y_axis, fontsize=10)
+        
+        # Only add x-axis label to bottom subplot
+        if idx == n_subplots - 1:
+            ax.set_xlabel(primary_dim, fontsize=12)
+        
+        # Format x-axis labels
+        if len(primary_values) > 3 or any(len(str(val)) > 10 for val in primary_values):
+            plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    
+    # Add title if requested - position it higher to avoid legend overlap
+    if show_titles:
+        fig.suptitle(os.path.splitext(filename)[0], fontsize=16, y=0.99)
+    
+    # Add a standard legend at the top of the figure - adjusted position
+    legend_elements = [
+        Patch(facecolor=colors[j], edgecolor='black', label=str(sec_val))
+        for j, sec_val in enumerate(secondary_values)
+    ]
+    
+    # Place legend between title and plots, with better vertical positioning
+    fig.legend(handles=legend_elements, title=secondary_dim, 
+              loc='upper center', bbox_to_anchor=(0.5, 0.94), 
+              ncol=min(len(secondary_values), 4))
+    
+    # Adjust layout to make room for the legend at the top
+    plt.tight_layout()
+    
+    # Add proper space at the top for both title and legend, preventing overlap
+    top_margin = 0.92  # Base margin
+    if show_titles:
+        top_margin = 0.88  # Less space if title is shown
+    
+    # Additional adjustment based on number of legend items
+    legend_rows = max(1, (len(secondary_values) + 3) // 4)  # Calculate rows in legend
+    legend_height = 0.02 * legend_rows  # Approximate height per row
+    
+    plt.subplots_adjust(top=top_margin - legend_height)
+    
+    return fig
+
+def save_plot_to_buffer(fig):
+    """Save plot to a buffer for downloading"""
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+    buffer.seek(0)
+    return buffer
+
+def create_zip_download(plot_buffers):
+    """Create a ZIP file containing all plots"""
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'a', zipfile.ZIP_DEFLATED) as zip_file:
+        for buffer, name in plot_buffers:
+            zip_file.writestr(name, buffer.getvalue())
+    
+    zip_buffer.seek(0)
+    st.download_button(
+        label="download all",
+        data=zip_buffer,
+        file_name="all_plots.zip",
+        mime="application/zip",
+        key="download_all_plots"
+    )
