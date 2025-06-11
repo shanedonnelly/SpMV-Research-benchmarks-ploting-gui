@@ -1,6 +1,8 @@
 import os
 import streamlit as st # type: ignore
 import glob
+import pandas as pd
+from plotting_component import render_plotting_component
 
 def get_subset_files():
     """Get all pickle files from the subset_pickle directory"""
@@ -61,3 +63,22 @@ def show_plotting_page():
     
     if selected_files != st.session_state.selected_subsets:
         st.session_state.selected_subsets = selected_files
+    
+    # Plotting section
+    if st.session_state.selected_subsets:
+        st.markdown("---")
+        st.markdown("### Data Visualization")
+        
+        # Load the selected dataframes
+        loaded_dataframes = []
+        try:
+            for file in st.session_state.selected_subsets:
+                df = pd.read_pickle(f"subset_pickle/{file}")
+                loaded_dataframes.append(df)
+            
+            # Render the plotting component
+            render_plotting_component(loaded_dataframes, st.session_state.selected_subsets)
+        except Exception as e:
+            st.error(f"Error loading dataframes: {str(e)}")
+    else:
+        st.info("Select at least one subset to start plotting.")

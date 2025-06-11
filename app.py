@@ -8,7 +8,7 @@ from filter_component import filter_dataframe
 from plotting_page import show_plotting_page
 
 # Set page config
-st.set_page_config(page_title="DataFrame Filter App")
+st.set_page_config(page_title="Benchmark Plotting App")
 
 # Add CSS to limit width of components
 st.markdown("""
