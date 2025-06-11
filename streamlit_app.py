@@ -21,7 +21,7 @@ if 'previous_columns' not in st.session_state:
     st.session_state.previous_columns = set()
 
 # Helper function for categorical filters
-def _handle_categorical_filter(df_col: pd.Series, col_name: str, container: st.container):
+def _handle_categorical_filter(df_col: pd.Series, col_name: str, container: st.container): # type: ignore
     reset_key = f"{col_name}_reset_flag"
     pending_key = f"{col_name}_pending_changes"
     expander_open_key = f"{col_name}_expander_open"
@@ -105,7 +105,7 @@ def _handle_categorical_filter(df_col: pd.Series, col_name: str, container: st.c
             st.rerun()
 
 # Helper function for numeric filters
-def _handle_numeric_filter(df_col: pd.Series, col_name: str, container: st.container):
+def _handle_numeric_filter(df_col: pd.Series, col_name: str, container: st.container): # type: ignore
     if df_col.empty:
         container.text(f"{col_name}: No data to filter.")
         return
@@ -173,7 +173,7 @@ def _handle_numeric_filter(df_col: pd.Series, col_name: str, container: st.conta
             st.session_state[reset_key] = True; st.rerun()
 
 # Helper function for datetime filters
-def _handle_datetime_filter(df_col: pd.Series, col_name: str, container: st.container):
+def _handle_datetime_filter(df_col: pd.Series, col_name: str, container: st.container): # type: ignore
     if df_col.empty:
         container.text(f"{col_name}: No data to filter.")
         return
@@ -208,7 +208,7 @@ def _handle_datetime_filter(df_col: pd.Series, col_name: str, container: st.cont
         st.session_state[reset_key] = True; st.rerun()
 
 # Helper function for text filters
-def _handle_text_filter(df_col: pd.Series, col_name: str, container: st.container):
+def _handle_text_filter(df_col: pd.Series, col_name: str, container: st.container): # type: ignore
     reset_key = f"{col_name}_reset_flag"
     pending_key = f"{col_name}_pending_changes"
     text_filter_key = f"{col_name}_text_filter"
