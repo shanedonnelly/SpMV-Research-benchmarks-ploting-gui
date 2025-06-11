@@ -249,14 +249,29 @@ def try_numeric_sort(values):
 
 def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles, filename):
     """Create side-by-side boxplot visualization"""
-    # Augmenter la résolution de 150 à 300 DPI
-    fig, ax = plt.subplots(figsize=(12, 8), dpi=300)
+    
+    primary_values_unique = df[primary_dim].unique()
+    num_primary_values = len(primary_values_unique)
+    
+    base_width = 5.0  # Base width for the plot
+    width_per_primary_category = 1.0
+    
+    if secondary_dim:
+        secondary_values_unique = df[secondary_dim].unique()
+        num_secondary_values = len(secondary_values_unique)
+        # Adjust width based on number of secondary categories to accommodate grouped bars
+        width_per_primary_category = 0.5 + 0.25 * num_secondary_values 
+    
+    dynamic_width = base_width + num_primary_values * width_per_primary_category
+    # Clamp width to a reasonable range
+    dynamic_width = max(8.0, min(20.0, dynamic_width))
+    
+    fig, ax = plt.subplots(figsize=(dynamic_width, 8), dpi=300)
     
     if secondary_dim:
         # Create grouped boxplots colored by secondary dimension
-        # Sort the unique values for both dimensions
-        primary_values = try_numeric_sort(df[primary_dim].unique())
-        secondary_values = try_numeric_sort(df[secondary_dim].unique())
+        primary_values = try_numeric_sort(primary_values_unique)
+        secondary_values = try_numeric_sort(secondary_values_unique)
         colors = get_pastel_colors(len(secondary_values))
         
         # Calculate positions and collect data
@@ -323,7 +338,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     
     # Rotate x-axis labels if needed
     if len(ax.get_xticklabels()) > 3 or any(len(str(label.get_text())) > 10 for label in ax.get_xticklabels()):
-        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+        plt.setp(ax.get_xticklabels(), rotation=30, ha='right') # Reduced rotation to 30
     
     plt.tight_layout()
     return fig
@@ -335,22 +350,31 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, fi
         return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, filename)
     
     # Get unique values for each dimension and sort them
-    primary_values = try_numeric_sort(df[primary_dim].unique())
-    secondary_values = try_numeric_sort(df[secondary_dim].unique())
+    primary_values_unique = df[primary_dim].unique()
+    secondary_values_unique = df[secondary_dim].unique()
+    
+    primary_values = try_numeric_sort(primary_values_unique)
+    secondary_values = try_numeric_sort(secondary_values_unique)
     n_subplots = len(secondary_values)
+
+    num_primary_values = len(primary_values)
+    base_width = 5.0
+    width_per_primary_category = 1.0
+    dynamic_width = base_width + num_primary_values * width_per_primary_category
+    dynamic_width = max(8.0, min(20.0, dynamic_width)) # Clamp width
+
+    # Adjust height based on number of subplots, with a minimum
+    fig_height_per_subplot = 2.5
+    min_fig_height = 5.0
+    dynamic_height = max(min_fig_height, n_subplots * fig_height_per_subplot)
     
-    # Create a figure with vertically stacked subplots
-    fig, axes = plt.subplots(n_subplots, 1, figsize=(12, 3*n_subplots), dpi=300, 
-                             sharex=True)
+    fig, axes = plt.subplots(n_subplots, 1, figsize=(dynamic_width, dynamic_height), dpi=300, 
+                             sharex=True, squeeze=False) # squeeze=False to always get an array
     
-    # Handle case with only one subplot
-    if n_subplots == 1:
-        axes = [axes]
-    
+    axes = axes.flatten() # Ensure axes is always a flat array
+
     # Colors for each subplot
     colors = get_pastel_colors(n_subplots)
-    
-    # Remove the shared y-limits calculation - each subplot will use its own limits
     
     # Create boxplots for each secondary dimension value
     for idx, (sec_val, color) in enumerate(zip(secondary_values, colors)):
@@ -399,36 +423,50 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, fi
         
         # Format x-axis labels
         if len(primary_values) > 3 or any(len(str(val)) > 10 for val in primary_values):
-            plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+            plt.setp(ax.get_xticklabels(), rotation=30, ha='right') # Reduced rotation to 30
     
-    # Add title if requested - position it higher to avoid legend overlap
+    # --- Improved Title and Legend Layout ---
+    rect_top = 0.95 # Default top of plotting area
+    legend_height_fraction = 0.0
+    
+    if secondary_dim:
+        legend_elements = [
+            Patch(facecolor=colors[j], edgecolor='black', label=str(sec_val))
+            for j, sec_val in enumerate(secondary_values)
+        ]
+        # Make legend wider if many items, up to 4 columns
+        legend_ncol = min(max(1, len(secondary_values) // (2 if len(secondary_values) > 4 else 1)), 4)
+        
+        # Estimate legend height based on rows
+        num_legend_rows = (len(legend_elements) + legend_ncol - 1) // legend_ncol
+        legend_height_fraction = num_legend_rows * 0.04 # Approximate fraction per row
+        
+        # Place legend
+        # Adjust bbox_to_anchor y based on whether title is present
+        legend_y_anchor = 0.98 if not show_titles else 0.92 
+        fig.legend(handles=legend_elements, title=secondary_dim, 
+                  loc='upper center', bbox_to_anchor=(0.5, legend_y_anchor), 
+                  ncol=legend_ncol, frameon=False)
+        rect_top -= legend_height_fraction # Make space for legend
+
     if show_titles:
-        fig.suptitle(os.path.splitext(filename)[0], fontsize=16, y=0.99)
+        fig.suptitle(os.path.splitext(filename)[0], fontsize=16, y=0.98)
+        rect_top -= 0.05 # Make space for suptitle
     
-    # Add a standard legend at the top of the figure - adjusted position
-    legend_elements = [
-        Patch(facecolor=colors[j], edgecolor='black', label=str(sec_val))
-        for j, sec_val in enumerate(secondary_values)
-    ]
-    
-    # Place legend between title and plots, with better vertical positioning
-    fig.legend(handles=legend_elements, title=secondary_dim, 
-              loc='upper center', bbox_to_anchor=(0.5, 0.94), 
-              ncol=min(len(secondary_values), 4))
-    
-    # Adjust layout to make room for the legend at the top
-    plt.tight_layout()
-    
-    # Add proper space at the top for both title and legend, preventing overlap
-    top_margin = 0.92  # Base margin
-    if show_titles:
-        top_margin = 0.88  # Less space if title is shown
-    
-    # Additional adjustment based on number of legend items
-    legend_rows = max(1, (len(secondary_values) + 3) // 4)  # Calculate rows in legend
-    legend_height = 0.02 * legend_rows  # Approximate height per row
-    
-    plt.subplots_adjust(top=top_margin - legend_height)
+    # Ensure rect_top doesn't become too small
+    rect_top = max(0.7, rect_top)
+
+    # Adjust layout to make room for title and legend
+    # Add padding: left, bottom, right, top
+    try:
+        plt.tight_layout(rect=[0.03, 0.05, 0.97, rect_top])
+    except ValueError:
+        # Fallback if rect values are problematic (e.g., top < bottom)
+        plt.tight_layout()
+
+
+    # Remove old subplots_adjust logic
+    # plt.subplots_adjust(top=top_margin - legend_height) # This line is removed
     
     return fig
 
