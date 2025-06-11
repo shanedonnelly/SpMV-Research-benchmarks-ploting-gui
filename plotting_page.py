@@ -9,7 +9,7 @@ def get_subset_files():
         return []
     return [os.path.basename(file) for file in sorted(glob.glob('subset_pickle/*.pkl'))]
 
-def show_plotting():
+def show_plotting_page():
     """Display the plotting page"""
     # Get subset files
     subset_files = get_subset_files()

@@ -5,7 +5,7 @@ import configparser
 import glob
 import re
 from filter_component import filter_dataframe
-from plotting_page import show_plotting
+from plotting_page import show_plotting_page
 
 # Set page config
 st.set_page_config(page_title="DataFrame Filter App")
@@ -240,7 +240,7 @@ def main():
             show_data_filtering()
             
         with tabs[1]:
-            show_plotting()
+            show_plotting_page()
 
 if __name__ == "__main__":
     main()
