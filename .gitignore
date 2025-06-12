@@ -6,7 +6,7 @@ old.py
 TODO.txt
 *.ini
 *.png
-layouts.py
+doc.py
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

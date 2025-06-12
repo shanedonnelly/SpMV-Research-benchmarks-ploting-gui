@@ -248,7 +248,7 @@ def _handle_text_filter(col_name: str, container: st.container): # type: ignore
         if action_button_cols[1].button("↺", key=f"{col_name}_reset_text_btn"):
             st.session_state[reset_key] = True; st.rerun()
 
-def filter_dataframe(df: pd.DataFrame, max_unique: int = 20, show_df_by_default: bool = True) -> pd.DataFrame:
+def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default: bool = True) -> pd.DataFrame:
     """
     Creates an interactive UI to filter a pandas DataFrame on multiple columns simultaneously.
     

@@ -9,7 +9,7 @@ def create_config():
 
     # Add sections and key-value pairs
     config['General'] = {
-        'max_unique': 20,
+        'max_unique': 50, # if string / categorical columns have less than this many unique values, they are shown in a dropdown, if more, they are shown as a text input (matching substring or regex)
         'show_df_by_default': 'False'
     }
 
