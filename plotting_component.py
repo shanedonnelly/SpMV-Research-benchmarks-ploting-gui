@@ -351,6 +351,14 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
                            axes_label_mode="Auto", x_label=None, y_label=None):
     """Create side-by-side boxplot visualization"""
     
+    # --- Parameter initialization with comments ---
+    DPI = 300  # Resolution of the output figure (lower for reasonable file size)
+    FONT_SIZE_AXIS = 14  # Font size for axis labels
+    FONT_SIZE_TITLE = 16  # Font size for plot title
+    FONT_SIZE_LEGEND = 13  # Font size for legend text
+    FONT_SIZE_LEGEND_TITLE = 14  # Font size for legend title
+    LINE_WIDTH = 0.8  # Width of lines for boxplots
+    
     primary_values_unique = df[primary_dim].unique()
     num_primary_values = len(primary_values_unique)
     
@@ -361,28 +369,28 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
         fig_height = fig_height_cm * 0.3937
     else:
         # Auto sizing logic - made consistent with stacked plots
-        base_width = 5.0
-        width_per_primary_category = 1.0
+        base_width = 5.0  # Base width of the plot
+        width_per_primary_category = 1.0  # Extra width for each primary category
         
         if secondary_dim:
             secondary_values_unique = df[secondary_dim].unique()
             num_secondary_values = len(secondary_values_unique)
-            width_per_primary_category = 0.5 + 0.25 * num_secondary_values 
+            width_per_primary_category = 0.5 + 0.25 * num_secondary_values  # Adjust width for secondary categories
         
         fig_width = base_width + num_primary_values * width_per_primary_category
-        fig_width = max(8.0, min(20.0, fig_width))
-        fig_height = 8.0 * 1.1  # Slight height increase for consistency with stacked plots
+        fig_width = max(8.0, min(20.0, fig_width))  # Constrain width between 8 and 20 inches
+        fig_height = 8.0  # Standard height for side-by-side plots
     
-    # Create figure with higher DPI for better resolution
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=1200)
+    # Create figure with reasonable DPI for better file size
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=DPI)
     
     # Use thinner lines for better appearance
-    plt.rcParams['lines.linewidth'] = 0.8
-    plt.rcParams['boxplot.flierprops.linewidth'] = 0.8
-    plt.rcParams['boxplot.boxprops.linewidth'] = 0.8
-    plt.rcParams['boxplot.whiskerprops.linewidth'] = 0.8
-    plt.rcParams['boxplot.capprops.linewidth'] = 0.8
-    plt.rcParams['boxplot.medianprops.linewidth'] = 0.8
+    plt.rcParams['lines.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.flierprops.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.boxprops.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.whiskerprops.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.capprops.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.medianprops.linewidth'] = LINE_WIDTH
     
     if secondary_dim:
         # Create grouped boxplots colored by secondary dimension
@@ -404,7 +412,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
                     data.append(subset[y_axis].values)
                     box_indices[(i, j)] = len(positions) - 1
         
-        # Create boxplot with outlier option
+        # Create boxplot with outlier option and black median line
         data = [d for d in data if len(d) > 0]  # Ensure data is not empty
         if not data:
             st.warning(f"No data to plot for the selected combination")
@@ -413,7 +421,8 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
         
         bp = ax.boxplot(data, positions=positions, patch_artist=True, 
                        labels=[""] * len(positions), widths=0.15,
-                       showfliers=show_outliers)
+                       showfliers=show_outliers,
+                       medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
         
         # Set primary dimension tick positions and labels
         ax.set_xticks([i + 0.125 * (len(secondary_values) - 1) for i in range(len(primary_values))])
@@ -426,12 +435,13 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
                     idx = box_indices[(i, j)]
                     bp['boxes'][idx].set_facecolor(colors[j])
         
-        # Add legend - standard format with consistent placement in upper right
+        # Add legend - enhanced size with larger font
         legend_elements = [
             Patch(facecolor=colors[j], edgecolor='black', label=str(sec_val))
             for j, sec_val in enumerate(secondary_values)
         ]
-        ax.legend(handles=legend_elements, title=secondary_dim, loc='upper right')
+        ax.legend(handles=legend_elements, title=secondary_dim, loc='upper right',
+                 fontsize=FONT_SIZE_LEGEND, title_fontsize=FONT_SIZE_LEGEND_TITLE)
         
     else:
         # Simple boxplot with primary dimension only
@@ -451,8 +461,9 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
             # Return an empty figure if no data
             return fig
             
-        # Create boxplot with outlier option
-        bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True, showfliers=show_outliers)
+        # Create boxplot with outlier option and black median line
+        bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True, showfliers=show_outliers,
+                       medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
         
         # Set consistent colors
         colors = get_pastel_colors(len(labels))
@@ -463,7 +474,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     if show_titles and title:
         # Sanitize title to remove special characters that might cause font issues
         title = ''.join(c for c in title if c.isprintable())
-        ax.set_title(title, fontsize=16)
+        ax.set_title(title, fontsize=FONT_SIZE_TITLE)
     
     # Set axis labels based on mode - sanitize labels
     x_axis_label = x_label if axes_label_mode == "Manual" and x_label else primary_dim
@@ -473,8 +484,8 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     x_axis_label = ''.join(c for c in str(x_axis_label) if c.isprintable())
     y_axis_label = ''.join(c for c in str(y_axis_label) if c.isprintable())
     
-    ax.set_xlabel(x_axis_label, fontsize=16)
-    ax.set_ylabel(y_axis_label, fontsize=16)
+    ax.set_xlabel(x_axis_label, fontsize=FONT_SIZE_AXIS)
+    ax.set_ylabel(y_axis_label, fontsize=FONT_SIZE_AXIS)
     
     # Sanitize tick labels to prevent font issues
     sanitized_labels = []
@@ -502,6 +513,16 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
                                       show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
                                       axes_label_mode, x_label, y_label)
     
+    # --- Parameter initialization with comments ---
+    DPI = 300  # Resolution of the output figure (lower for reasonable file size)
+    FONT_SIZE_AXIS = 14  # Font size for axis labels
+    FONT_SIZE_TITLE = 16  # Font size for plot title
+    FONT_SIZE_LEGEND = 12  # Font size for legend text
+    FONT_SIZE_LEGEND_TITLE = 14  # Font size for legend title
+    LINE_WIDTH = 0.8  # Width of lines for boxplots
+    SUBPLOT_HEIGHT = 3.2  # Height per subplot (adjusted to be less tall but still adequate)
+    HSPACE = 0 # Vertical space between subplots
+    
     # Get unique values for each dimension and sort them
     primary_values_unique = df[primary_dim].unique()
     secondary_values_unique = df[secondary_dim].unique()
@@ -518,37 +539,30 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
     else:
         # Auto sizing logic
         num_primary_values = len(primary_values)
-        base_width = 5.0
-        width_per_primary_category = 1.0
+        base_width = 5.0  # Base width of the plot
+        width_per_primary_category = 1.0  # Extra width for each primary category
         fig_width = base_width + num_primary_values * width_per_primary_category
-        fig_width = max(8.0, min(20.0, fig_width)) # Clamp width
+        fig_width = max(8.0, min(20.0, fig_width))  # Constrain width between 8 and 20 inches
 
-        # Improved auto height calculation for better subplot visibility
-        fig_height_per_subplot = 4.0
-        min_fig_height = 5.0
-        # Add extra height for legend + apply a scaling factor for better proportion
-        fig_height = max(min_fig_height, n_subplots * fig_height_per_subplot) * 1.1
+        # Calculate total figure height based on number of subplots
+        min_fig_height = 5.0  # Minimum figure height
+        title_space = 0.5 if show_titles else 0  # Space for title if needed
+        
+        # Calculate total height
+        fig_height = max(min_fig_height, n_subplots * SUBPLOT_HEIGHT + title_space)
     
-    # Create figure with higher DPI for better resolution
-    try:
-        fig, axes = plt.subplots(n_subplots, 1, figsize=(fig_width, fig_height), dpi=1200, 
-                                sharex=True, squeeze=False)
-        axes = axes.flatten()  # Ensure axes is always a flat array
-    except ValueError as e:
-        st.error(f"Error creating figure: {e}")
-        # Create a fallback figure
-        fig = plt.figure(figsize=(fig_width, fig_height), dpi=1200)
-        return fig
+    # Create figure with reasonable DPI for better file size
+    fig, axes = plt.subplots(n_subplots, 1, figsize=(fig_width, fig_height), dpi=DPI, 
+                           sharex=True, squeeze=False)
+    axes = axes.flatten()  # Ensure axes is always a flat array
     
     # Use thinner lines for better appearance
-    plt.rcParams['lines.linewidth'] = 0.8
-    plt.rcParams['boxplot.flierprops.linewidth'] = 0.8
-    plt.rcParams['boxplot.boxprops.linewidth'] = 0.8
-    plt.rcParams['boxplot.whiskerprops.linewidth'] = 0.8
-    plt.rcParams['boxplot.capprops.linewidth'] = 0.8
-    plt.rcParams['boxplot.medianprops.linewidth'] = 0.8
-    #median line in black
-
+    plt.rcParams['lines.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.flierprops.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.boxprops.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.whiskerprops.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.capprops.linewidth'] = LINE_WIDTH
+    plt.rcParams['boxplot.medianprops.linewidth'] = LINE_WIDTH
     
     # Colors for each subplot
     colors = get_pastel_colors(n_subplots)
@@ -588,9 +602,10 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
             if all(len(data) == 0 for data in grouped_data):
                 continue
                 
-            # Create boxplot with outlier option
+            # Create boxplot with outlier option and black median line
             try:
-                bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True, showfliers=show_outliers)
+                bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True, showfliers=show_outliers,
+                              medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
                 
                 # Color the boxes
                 for box in bp['boxes']:
@@ -606,7 +621,7 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
                 padding = (y_max - y_min) * 0.05 if y_max > y_min else y_max * 0.05
                 ax.set_ylim(y_min - padding, y_max + padding)
         
-        # Set axis labels based on mode with increased font size
+        # Set axis labels based on mode
         x_axis_label = x_label if axes_label_mode == "Manual" and x_label else primary_dim
         y_axis_label = y_label if axes_label_mode == "Manual" and y_label else y_axis
         
@@ -614,63 +629,44 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
         x_axis_label = ''.join(c for c in str(x_axis_label) if c.isprintable())
         y_axis_label = ''.join(c for c in str(y_axis_label) if c.isprintable())
         
-        # Increased font size for axis labels
-        ax.set_ylabel(y_axis_label, fontsize=16)  # Increased from 10
+        # Add axis labels with specified font size
+        ax.set_ylabel(y_axis_label, fontsize=FONT_SIZE_AXIS)
         
         # Only add x-axis label to bottom subplot
         if idx == n_subplots - 1:
-            ax.set_xlabel(x_axis_label, fontsize=16)  # Increased from 12
+            ax.set_xlabel(x_axis_label, fontsize=FONT_SIZE_AXIS)
     
-    # --- Improved Title and Legend Layout ---
-    # Fix vertical spacing issues
-    rect_top = 0.95 # Default top of plotting area
+    # Add title if requested - position just a few pixels above the plot
+    if show_titles and title:
+        title = ''.join(c for c in title if c.isprintable())
+        fig.suptitle(title, fontsize=FONT_SIZE_TITLE, y= 1)
     
+    # Create legend on the right side of the plot
     if secondary_dim:
         legend_elements = [
             Patch(facecolor=colors[j], edgecolor='black', label=str(sec_val))
             for j, sec_val in enumerate(secondary_values)
         ]
-        # Make legend wider if many items, up to 4 columns
-        legend_ncol = min(max(1, len(secondary_values) // (2 if len(secondary_values) > 4 else 1)), 4)
         
-        # Zero spacing between legend and plot
-        legend_y_anchor = 1.02 if not show_titles else 1.0
-        
+        # Place legend to the right of the plot
         fig.legend(handles=legend_elements, title=secondary_dim, 
-                  loc='upper center', bbox_to_anchor=(0.5, legend_y_anchor), 
-                  ncol=legend_ncol, frameon=False,
-                  fontsize=12, title_fontsize=14)
-        
-        # Calculate space needed for legend
-        num_legend_rows = (len(legend_elements) + legend_ncol - 1) // legend_ncol
-        legend_height_fraction = num_legend_rows * 0.02
-        rect_top -= legend_height_fraction
-
-    if show_titles and title:
-        # Sanitize title to remove special characters
-        title = ''.join(c for c in title if c.isprintable())
-        # Position title right at the top
-        fig.suptitle(title, fontsize=18, y=0.995) 
-        rect_top -= 0.02
+                  bbox_to_anchor=(1, 0.5), loc='center left',
+                  fontsize=FONT_SIZE_LEGEND, title_fontsize=FONT_SIZE_LEGEND_TITLE)
     
-    # Ensure rect_top doesn't become too small
-    rect_top = max(0.85, rect_top)
+    # Adjust the layout to make room for the legend
+    plt.tight_layout()
     
-    # Use tighter layout with minimal padding
-    try:
-        plt.tight_layout(rect=[0.03, 0.05, 0.97, rect_top], pad=0.3, h_pad=0.3) 
-        # Removed subplot adjustment that was changing the default spacing
-    except ValueError:
-        # Fallback if rect values are problematic
-        plt.tight_layout(pad=0.3, h_pad=0.3)
+    # Additional adjustment for the legend on the right
+    if secondary_dim:
+        plt.subplots_adjust(right=0.85, hspace=HSPACE)
     
     return fig
 
 def save_plot_to_buffer(fig, format='png'):
     """Save plot to a buffer for downloading"""
     buffer = io.BytesIO()
-    # Optimize saving with tight bbox to reduce margins
-    fig.savefig(buffer, format=format, dpi=600, bbox_inches='tight')
+    # Optimize saving with tight bbox to reduce margins, reduced DPI for better file size
+    fig.savefig(buffer, format=format, dpi=300, bbox_inches='tight')
     buffer.seek(0)
     return buffer
 
