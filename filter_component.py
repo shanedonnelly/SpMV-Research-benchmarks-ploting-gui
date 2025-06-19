@@ -22,19 +22,27 @@ def _handle_categorical_filter(df_col: pd.Series, col_name: str, container: st.c
     pending_key = f"{col_name}_pending_changes"
     expander_open_key = f"{col_name}_expander_open"
     selected_values_key = f"{col_name}_selected_values"
+    applied_selected_values_key = f"{col_name}_applied_selected_values"
     search_text_key = f"{col_name}_search_text"
 
     if expander_open_key not in st.session_state:
         st.session_state[expander_open_key] = False
     
-    unique_values = list(df_col.unique())
+    unique_values = sorted(list(df_col.unique()), key=str)
     if selected_values_key not in st.session_state:
-        st.session_state[selected_values_key] = unique_values
+        # If the column contains nulls, deselect them by default.
+        # This makes the initial "pending" state (red OK button) logical.
+        if df_col.isnull().any():
+            st.session_state[selected_values_key] = [v for v in unique_values if not pd.isnull(v)]
+        else:
+            st.session_state[selected_values_key] = unique_values
+        st.session_state[applied_selected_values_key] = unique_values
     if search_text_key not in st.session_state:
         st.session_state[search_text_key] = ""
 
     if st.session_state[reset_key]:
         st.session_state[selected_values_key] = unique_values
+        st.session_state[applied_selected_values_key] = unique_values
         st.session_state[search_text_key] = ""
         if col_name in st.session_state.filters_applied:
             del st.session_state.filters_applied[col_name]
@@ -60,9 +68,9 @@ def _handle_categorical_filter(df_col: pd.Series, col_name: str, container: st.c
                 ]
             st.rerun()
 
-        display_values = sorted([
+        display_values = [
             val for val in unique_values if st.session_state[search_text_key].lower() in str(val).lower()
-        ]) if st.session_state[search_text_key] else sorted(unique_values)
+        ] if st.session_state[search_text_key] else unique_values
 
         button_cols_select = st.columns(2)
         if button_cols_select[0].button("Select All Visible", key=f"{col_name}_select_all_visible"):
@@ -93,6 +101,7 @@ def _handle_categorical_filter(df_col: pd.Series, col_name: str, container: st.c
         action_button_cols = st.columns([1,1,8]) # OK, Reset, spacer
         button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"
         if action_button_cols[0].button("OK", key=f"{col_name}_ok_cat", type=button_type):
+            st.session_state[applied_selected_values_key] = st.session_state[selected_values_key]
             st.session_state.filters_applied[col_name] = True
             st.session_state[pending_key] = False
             st.rerun()
@@ -102,13 +111,14 @@ def _handle_categorical_filter(df_col: pd.Series, col_name: str, container: st.c
 
 # Helper function for numeric filters
 def _handle_numeric_filter(df_col: pd.Series, col_name: str, container: st.container): # type: ignore
-    if df_col.empty:
-        container.text(f"{col_name}: No data to filter.")
+    if df_col.dropna().empty:
+        container.text(f"{col_name}: No data to filter (all nulls or empty).")
         return
 
     reset_key = f"{col_name}_reset_flag"
     pending_key = f"{col_name}_pending_changes"
     min_val_key, max_val_key = f"{col_name}_filter_min", f"{col_name}_filter_max"
+    applied_min_val_key, applied_max_val_key = f"{col_name}_applied_filter_min", f"{col_name}_applied_filter_max"
     unique_val_key = f"{col_name}_unique_value"
     expanded_key = f"{col_name}_numeric_expanded"
 
@@ -116,14 +126,19 @@ def _handle_numeric_filter(df_col: pd.Series, col_name: str, container: st.conta
     is_int = is_integer_dtype(df_col) or df_col.equals(df_col.round(0))
     step, num_format = (1.0, None) if is_int else (0.01, "%.5f") # Adjusted step for float
 
-    if min_val_key not in st.session_state: st.session_state[min_val_key] = col_min_orig
-    if max_val_key not in st.session_state: st.session_state[max_val_key] = col_max_orig
+    if min_val_key not in st.session_state:
+        st.session_state[min_val_key] = col_min_orig
+        st.session_state[applied_min_val_key] = col_min_orig
+    if max_val_key not in st.session_state:
+        st.session_state[max_val_key] = col_max_orig
+        st.session_state[applied_max_val_key] = col_max_orig
     if unique_val_key not in st.session_state: st.session_state[unique_val_key] = None
     if expanded_key not in st.session_state: st.session_state[expanded_key] = True
 
 
     if st.session_state[reset_key]:
         st.session_state[min_val_key], st.session_state[max_val_key] = col_min_orig, col_max_orig
+        st.session_state[applied_min_val_key], st.session_state[applied_max_val_key] = col_min_orig, col_max_orig
         st.session_state[unique_val_key] = None
         if col_name in st.session_state.filters_applied: del st.session_state.filters_applied[col_name]
         st.session_state[pending_key] = False
@@ -163,6 +178,8 @@ def _handle_numeric_filter(df_col: pd.Series, col_name: str, container: st.conta
         action_button_cols = st.columns([1,1,8])
         button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"
         if action_button_cols[0].button("OK", key=f"{col_name}_ok_num", type=button_type):
+            st.session_state[applied_min_val_key] = st.session_state[min_val_key]
+            st.session_state[applied_max_val_key] = st.session_state[max_val_key]
             st.session_state.filters_applied[col_name] = True
             st.session_state[pending_key] = False; st.rerun()
         if action_button_cols[1].button("↺", key=f"{col_name}_reset_num_btn"):
@@ -170,8 +187,8 @@ def _handle_numeric_filter(df_col: pd.Series, col_name: str, container: st.conta
 
 # Helper function for datetime filters
 def _handle_datetime_filter(df_col: pd.Series, col_name: str, container: st.container): # type: ignore
-    if df_col.empty:
-        container.text(f"{col_name}: No data to filter.")
+    if df_col.dropna().empty:
+        container.text(f"{col_name}: No data to filter (all nulls or empty).")
         return
 
     reset_key = f"{col_name}_reset_flag"
@@ -200,7 +217,7 @@ def _handle_datetime_filter(df_col: pd.Series, col_name: str, container: st.cont
         if len(new_range_in_widget) == 2 and new_range_in_widget != current_range_in_widget:
             st.session_state[range_key] = new_range_in_widget
             st.session_state[pending_key] = True
-            # st.rerun() # Removed auto-rerun
+            st.rerun() # Re-run to show pending state on button
 
         action_button_cols = st.columns([1,1,8])
         button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"
@@ -212,7 +229,7 @@ def _handle_datetime_filter(df_col: pd.Series, col_name: str, container: st.cont
             st.session_state[reset_key] = True; st.rerun()
 
 # Helper function for text filters
-def _handle_text_filter(col_name: str, container: st.container): # type: ignore
+def _handle_text_filter(df_col: pd.Series, col_name: str, container: st.container): # type: ignore
     reset_key = f"{col_name}_reset_flag"
     pending_key = f"{col_name}_pending_changes"
     text_filter_key = f"{col_name}_text_filter"
@@ -234,10 +251,18 @@ def _handle_text_filter(col_name: str, container: st.container): # type: ignore
     with container.expander("Filter details", expanded=st.session_state[expanded_key]):
         current_text_in_widget = st.session_state[text_filter_key]
         new_text_in_widget = st.text_input(f"Substring or regex in {col_name}", current_text_in_widget, key=f"{col_name}_text_in")
+
+        if new_text_in_widget:
+            try:
+                match_count = df_col.astype(str).str.contains(new_text_in_widget, case=False, na=False).sum()
+                st.caption(f"{match_count} rows found")
+            except Exception:
+                st.caption("Invalid regex")
+
         if new_text_in_widget != current_text_in_widget:
             st.session_state[text_filter_key] = new_text_in_widget
             st.session_state[pending_key] = True
-            # st.rerun() # Removed auto-rerun
+            st.rerun() # Re-run to show count and pending state on button
 
         action_button_cols = st.columns([1,1,8])
         button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"
@@ -317,7 +342,12 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
             reset_key_generic = f"{column}_reset_flag"
             pending_changes_key = f"{column}_pending_changes"
             if reset_key_generic not in st.session_state: st.session_state[reset_key_generic] = False
-            if pending_changes_key not in st.session_state: st.session_state[pending_changes_key] = False
+            if pending_changes_key not in st.session_state:
+                st.session_state[pending_changes_key] = False
+                # If column has NaNs, applying any filter will remove them, which is a change.
+                # So, we should start with a pending change state (red OK button).
+                if df_copy[column].isnull().any():
+                    st.session_state[pending_changes_key] = True
             
             df_column_series = df_copy[column]
 
@@ -338,17 +368,17 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
             elif is_datetime64_any_dtype(df_column_series):
                 _handle_datetime_filter(df_column_series, column, right)
             else:  # Default to text input for other types (likely objects with high cardinality)
-                _handle_text_filter(column, right)
+                _handle_text_filter(df_column_series, column, right)
             
             # Apply filter to intermediate_filtered_df if "OK"/"Apply" was pressed for this column
             if column in st.session_state.filters_applied and st.session_state.filters_applied[column]:
                 if is_categorical_type or is_low_cardinality_obj or \
                    (df_column_series.nunique() < max_unique and not is_numeric_dtype(df_column_series) and not is_datetime64_any_dtype(df_column_series)):
-                    selected_vals = st.session_state.get(f"{column}_selected_values", []) # Assuming categorical handles this internally or needs similar adjustment if issues arise
+                    selected_vals = st.session_state.get(f"{column}_applied_selected_values", [])
                     intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].isin(selected_vals)]
                 elif is_numeric_dtype(df_column_series):
-                    min_val = st.session_state.get(f"{column}_filter_min", df_column_series.min()) # Assuming numeric handles this internally or needs similar adjustment if issues arise
-                    max_val = st.session_state.get(f"{column}_filter_max", df_column_series.max())
+                    min_val = st.session_state.get(f"{column}_applied_filter_min", df_column_series.min())
+                    max_val = st.session_state.get(f"{column}_applied_filter_max", df_column_series.max())
                     intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].between(min_val, max_val)]
                 elif is_datetime64_any_dtype(df_column_series):
                     # Use the applied date range
@@ -357,10 +387,18 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
                         start_date, end_date = pd.to_datetime(date_range_to_apply[0]), pd.to_datetime(date_range_to_apply[1])
                         intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].between(start_date, end_date)]
                 else: # Text
-                    # Use the applied text filter
+                    # Use the applied text filter. This logic ensures that nulls are always
+                    # excluded when the filter is active, even with an empty search string.
                     text_to_apply = st.session_state.get(f"{column}_applied_text_filter", "")
-                    if text_to_apply:
-                        intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].astype(str).str.contains(text_to_apply, case=False, na=False)]
+                    
+                    # Create a mask for non-null values. These are the only candidates to be kept.
+                    mask = intermediate_filtered_df[column].notna()
+                    
+                    # On these candidates, apply the text filter. An empty search string will match all of them.
+                    # This updates the mask in-place for the non-null rows.
+                    mask[mask] = intermediate_filtered_df.loc[mask, column].astype(str).str.contains(text_to_apply, case=False)
+                    
+                    intermediate_filtered_df = intermediate_filtered_df[mask]
         
         with st.container():
             # Use st.session_state.show_df for the checkbox's value
@@ -369,7 +407,7 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
                 st.session_state.show_df = new_show_df_state
                 st.rerun() # Rerun if checkbox state changes to immediately show/hide
 
-            st.caption(f"Filtered rows: {len(intermediate_filtered_df)}")
+            st.caption(f"Filtered rows: {len(intermediate_filtered_df)} out of {len(df)}")
 
         if st.session_state.show_df:
             st.dataframe(intermediate_filtered_df)
