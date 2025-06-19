@@ -9,14 +9,17 @@ data = {
     'Name': [
         'Alice', 'Bob', 'Charlie', 'David', 'Emily', 
         'Frank', 'Grace', 'Henry', 'Ivy', 'Jack',
+        'Pablo'
     ],
     'City': [
         'New York', 'Los Angeles', 'Chicago', 'New York', 'Los Angeles',
         'Chicago', 'New York', 'Los Angeles', 'Chicago', 'New York',
+        None
     ],
     'Salary': [
         2000, 2500, 1000, 3000, 1500,
         2200, 2800, 1200, 1800, 2400,
+        None
     ],
     'Birthdate': [
         datetime.datetime(1990, 1, 1, 12, 0, 0),
@@ -29,6 +32,7 @@ data = {
         datetime.datetime(1990, 8, 1, 12, 0, 0),
         datetime.datetime(1990, 9, 1, 12, 0, 0),
         datetime.datetime(1990, 10, 1, 12, 0, 0),
+        None
     ]
 }
 df = pd.DataFrame(data)
