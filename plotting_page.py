@@ -1,5 +1,5 @@
 import os
-import streamlit as st # type: ignore
+import streamlit as st
 import glob
 import pandas as pd
 from plotting_component import render_plotting_component

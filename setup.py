@@ -69,3 +69,4 @@ if __name__ == "__main__":
     create_config()
     convert_csv_to_pickle()
     print("Setup complete!")
+

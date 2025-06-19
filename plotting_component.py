@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt # type: ignore
+import matplotlib.pyplot as plt
 import os
 import io
 import zipfile
 import numpy as np
-import matplotlib.colors as mcolors # type: ignore
-from matplotlib.patches import Patch # type: ignore
+import matplotlib.colors as mcolors
+from matplotlib.patches import Patch
 
 def check_columns_match(dataframes):
     """

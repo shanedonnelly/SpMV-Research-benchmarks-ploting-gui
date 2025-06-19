@@ -1,13 +1,17 @@
 import os
 import pandas as pd
-import streamlit as st # type: ignore
+import streamlit as st 
 import configparser
 import glob
 import re
 from filter_component import filter_dataframe
 from plotting_page import show_plotting_page
+from setup import convert_csv_to_pickle
 
 # Set page config
+
+convert_csv_to_pickle()
+
 st.set_page_config(page_title="Benchmark Plotting App", page_icon="./logo.jpeg")
 
 
