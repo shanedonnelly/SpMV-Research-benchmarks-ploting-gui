@@ -3,7 +3,7 @@
 *.parquet
 old.py
 *.pdf
-TODO.txt
+TODO.*
 *.ini
 *.png
 doc.py
