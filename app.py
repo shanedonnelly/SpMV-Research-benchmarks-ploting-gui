@@ -10,7 +10,7 @@ from setup import convert_csv_to_pickle
 
 # Set page config
 
-convert_csv_to_pickle()
+# convert_csv_to_pickle()
 
 st.set_page_config(page_title="Benchmark Plotting App", page_icon="./logo.jpeg")
 
