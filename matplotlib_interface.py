@@ -54,8 +54,8 @@ def try_numeric_sort(values):
         # Convert to string to handle all types
         val_str = str(val)
         
-        # Try to extract first number from string (e.g., from "[2-4]" extract 2)
-        numbers = re.findall(r'[-+]?\d+\.?\d*', val_str)
+        # Regex to find numbers, including scientific notation (e.g., 1e6)
+        numbers = re.findall(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?', val_str)
         if numbers:
             return (0, float(numbers[0])) # Group numeric-like strings first
         
@@ -270,7 +270,7 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
 
         # Calculate total figure height based on number of subplots
         min_fig_height = 5.0  # Minimum figure height
-        title_space = 0.5 if show_titles else 0  # Space for title if needed
+        title_space = 0.5 if show_titles else 0 # Space for title if needed
         
         # Calculate total height
         fig_height = max(min_fig_height, n_subplots * SUBPLOT_HEIGHT + title_space)
