@@ -1,7 +1,7 @@
 import io
 import re
 import numpy as np
-import streamlit as st
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import Patch
@@ -11,6 +11,17 @@ def _sanitize_text(text):
     if text is None:
         return ""
     return ''.join(c for c in str(text) if c.isprintable())
+
+def _get_unique_values(series):
+    """Get unique, non-null values from a series, preserving category order."""
+    if pd.api.types.is_categorical_dtype(series):
+        # For categoricals, use the defined category order
+        uniques = series.cat.categories
+    else:
+        uniques = series.unique()
+    
+    # Filter out any null/NaN values
+    return [v for v in uniques if pd.notna(v)]
 
 def get_pastel_colors(n):
     """
@@ -35,22 +46,28 @@ def try_numeric_sort(values):
     For strings like '[2-4]', '[4-8]', will sort by the first number
     """
     def extract_sort_key(val):
+        # Handle NaN or None values
+        if pd.isna(val):
+            return (2, val) # Group NaNs last
+
         # Convert to string to handle all types
         val_str = str(val)
         
         # Try to extract first number from string (e.g., from "[2-4]" extract 2)
         numbers = re.findall(r'[-+]?\d+\.?\d*', val_str)
         if numbers:
-            return float(numbers[0])
+            return (0, float(numbers[0])) # Group numeric-like strings first
         
         # If no numbers, return string for lexicographical sort
-        return val_str
+        return (1, val_str) # Group other strings second
     
     try:
+        # The key returns tuples, which are sorted element by element.
+        # This prevents TypeError from comparing different types.
         return sorted(values, key=extract_sort_key)
-    except Exception:
-        # Fallback to normal sorting
-        return sorted(values)
+    except TypeError:
+        # Fallback to normal sorting, converting all to string to be safe
+        return sorted(values, key=str)
 
 def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles, title, 
                            show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, fig_height_cm=None,
@@ -65,8 +82,10 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     FONT_SIZE_LEGEND_TITLE = 14  # Font size for legend title
     LINE_WIDTH = 0.8  # Width of lines for boxplots
     
-    primary_values_unique = df[primary_dim].unique()
-    num_primary_values = len(primary_values_unique)
+    # Get unique values, filter NaNs, and sort
+    primary_values_unique = _get_unique_values(df[primary_dim])
+    primary_values = try_numeric_sort(primary_values_unique)
+    num_primary_values = len(primary_values)
     
     # Determine figure size
     if fig_size_mode == "Manual" and fig_width_cm and fig_height_cm:
@@ -79,9 +98,9 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
         width_per_primary_category = 1.0  # Extra width for each primary category
         
         if secondary_dim:
-            secondary_values_unique = df[secondary_dim].unique()
-            num_secondary_values = len(secondary_values_unique)
-            width_per_primary_category = 0.5 + 0.25 * num_secondary_values  # Adjust width for secondary categories
+            secondary_values_unique = _get_unique_values(df[secondary_dim])
+            secondary_values = try_numeric_sort(secondary_values_unique)
+            width_per_primary_category = 0.5 + 0.25 * len(secondary_values)  # Adjust width for secondary categories
         
         fig_width = base_width + num_primary_values * width_per_primary_category
         fig_width = max(8.0, min(20.0, fig_width))  # Constrain width between 8 and 20 inches
@@ -100,8 +119,8 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     
     if secondary_dim:
         # Create grouped boxplots colored by secondary dimension
-        primary_values = try_numeric_sort(primary_values_unique)
-        secondary_values = try_numeric_sort(df[secondary_dim].unique())
+        secondary_values_unique = _get_unique_values(df[secondary_dim])
+        secondary_values = try_numeric_sort(secondary_values_unique)
         colors = get_pastel_colors(len(secondary_values))
         
         # Calculate positions and collect data
@@ -151,8 +170,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
         
     else:
         # Simple boxplot with primary dimension only
-        # Sort primary values
-        primary_values = try_numeric_sort(df[primary_dim].unique())
+        # primary_values is already sorted from above
         grouped_data = []
         labels = []
         
@@ -222,13 +240,19 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
     SUBPLOT_HEIGHT = 3.2  # Height per subplot (adjusted to be less tall but still adequate)
     HSPACE = 0 # Vertical space between subplots
     
-    # Get unique values for each dimension and sort them
-    primary_values_unique = df[primary_dim].unique()
-    secondary_values_unique = df[secondary_dim].unique()
+    # Get unique values for each dimension, filter NaNs, and sort them
+    primary_values_unique = _get_unique_values(df[primary_dim])
+    secondary_values_unique = _get_unique_values(df[secondary_dim])
     
     primary_values = try_numeric_sort(primary_values_unique)
     secondary_values = try_numeric_sort(secondary_values_unique)
     n_subplots = len(secondary_values)
+
+    if n_subplots == 0:
+        # Handle case where secondary dimension has no valid data
+        return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
+                                      show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
+                                      axes_label_mode, x_label, y_label)
 
     # Determine figure size
     if fig_size_mode == "Manual" and fig_width_cm and fig_height_cm:
@@ -253,7 +277,8 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
     # Create figure with reasonable DPI for better file size
     fig, axes = plt.subplots(n_subplots, 1, figsize=(fig_width, fig_height), dpi=DPI, 
                            sharex=True, squeeze=False)
-    axes = axes.flatten()  # Ensure axes is always a flat array
+    # Flatten and reverse axes so smallest secondary value is at the bottom
+    axes = axes.flatten()[::-1]
     
     # Use thinner lines for better appearance
     plt.rcParams['lines.linewidth'] = LINE_WIDTH
@@ -267,12 +292,11 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
     colors = get_pastel_colors(n_subplots)
     
     # Create boxplots for each secondary dimension value
-    for idx, (sec_val, color) in enumerate(zip(secondary_values, colors)):
-        if idx >= len(axes):  # Ensure we don't try to access non-existent axes
-            break
+    for idx, ax in enumerate(axes):
+        # sec_val corresponds to the axis index (since both are sorted ascending)
+        sec_val = secondary_values[idx]
+        color = colors[idx]
             
-        ax = axes[idx]
-        
         # Filter data for this secondary value
         sec_df = df[df[secondary_dim] == sec_val]
         
@@ -323,8 +347,8 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
         # Add axis labels with specified font size
         ax.set_ylabel(_sanitize_text(y_axis_label), fontsize=FONT_SIZE_AXIS)
         
-        # Only add x-axis label to bottom subplot
-        if idx == n_subplots - 1:
+        # Only add x-axis label to bottom subplot (which is now axes[0])
+        if idx == 0:
             ax.set_xlabel(_sanitize_text(x_axis_label), fontsize=FONT_SIZE_AXIS)
     
     # Add title if requested
@@ -343,6 +367,12 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
                   bbox_to_anchor=(0.90, 0.5), loc='center left',
                   fontsize=FONT_SIZE_LEGEND, title_fontsize=FONT_SIZE_LEGEND_TITLE)
     
+    # Rotate x-axis labels on the bottom plot if needed
+    bottom_ax = axes[0]
+    sanitized_labels = [_sanitize_text(label.get_text()) for label in bottom_ax.get_xticklabels()]
+    if len(sanitized_labels) > 3 or any(len(label) > 10 for label in sanitized_labels):
+        plt.setp(bottom_ax.get_xticklabels(), rotation=30, ha='right')
+
     # Adjust the layout to make room for the legend
     plt.tight_layout()
     

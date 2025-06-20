@@ -31,24 +31,87 @@ def is_numerical_column(df, column):
     """
     return pd.api.types.is_numeric_dtype(df[column])
 
-def bin_numerical_data(df, column, n_bins=4):
-    """
-    Split numerical data into bins for grouping
-    Not fully implemented - basic functionality only
-    """
-    min_val = df[column].min()
-    max_val = df[column].max()
-    bin_edges = np.linspace(min_val, max_val, n_bins + 1)
+def render_binning_controls(df, column_name, key_prefix):
+    """Renders performant sliders and inputs for numerical binning."""
+    st.markdown(f"##### Binning for `{column_name}`")
+    min_val = float(df[column_name].min())
+    max_val = float(df[column_name].max())
+
+    n_bins_key = f"plot_{key_prefix}_n_bins"
+    boundaries_key = f"plot_{key_prefix}_boundaries"
+
+    # Use a callback on the first slider to reset boundaries when n_bins changes
+    def n_bins_changed():
+        n_bins = st.session_state[n_bins_key]
+        if n_bins > 1:
+            # Calculate new, equally spaced boundaries
+            new_boundaries = np.linspace(min_val, max_val, n_bins + 1)[1:-1]
+            st.session_state[boundaries_key] = [round(b, 1) for b in new_boundaries]
+        elif boundaries_key in st.session_state:
+            # Clear boundaries if n_bins is 1
+            del st.session_state[boundaries_key]
+
+    n_bins = st.slider(
+        "Number of ranges",
+        min_value=1, max_value=10, step=1,
+        key=n_bins_key,
+        on_change=n_bins_changed,
+        # Set default value without overwriting existing state
+        value=st.session_state.get(n_bins_key, 1)
+    )
+
+    if n_bins <= 1:
+        return None
+
+    # Ensure boundaries are initialized if they don't exist for the current n_bins
+    if boundaries_key not in st.session_state or len(st.session_state.get(boundaries_key, [])) != n_bins - 1:
+        n_bins_changed()
+
+    boundaries = st.session_state.get(boundaries_key, [])
     
-    # Create bin labels
-    bin_labels = []
-    for i in range(n_bins):
-        bin_labels.append(f"{bin_edges[i]:.2f} - {bin_edges[i+1]:.2f}")
+    st.caption("Fine-tune range delimiters")
     
-    # Assign data to bins
-    binned_column = pd.cut(df[column], bins=bin_edges, labels=bin_labels, include_lowest=True)
+    # Determine step based on column dtype
+    is_int = pd.api.types.is_integer_dtype(df[column_name])
+    step = 1.0 if is_int else 0.1
     
-    return binned_column
+    num_inputs = n_bins - 1
+    inputs_per_row = 5
+    new_boundaries = []
+    
+    # Create a list of all the number inputs to be created
+    all_input_indices = list(range(num_inputs))
+
+    for i in range(0, num_inputs, inputs_per_row):
+        row_indices = all_input_indices[i:i + inputs_per_row]
+        cols = st.columns(len(row_indices))
+        
+        for j, input_idx in enumerate(row_indices):
+            with cols[j]:
+                # Set min/max for each input to prevent overlap
+                min_b = boundaries[input_idx-1] if input_idx > 0 else min_val
+                max_b = boundaries[input_idx+1] if input_idx < len(boundaries) - 1 else max_val
+                
+                val = st.number_input(
+                    label=f"boundary_{input_idx}",
+                    label_visibility="collapsed",
+                    value=float(boundaries[input_idx]),
+                    min_value=float(min_b),
+                    max_value=float(max_b),
+                    step=step,
+                    format="%.4f",
+                    key=f"{boundaries_key}_input_{input_idx}"
+                )
+                new_boundaries.append(val)
+
+    # Update session state only if there's a change
+    if new_boundaries != boundaries:
+        st.session_state[boundaries_key] = sorted(new_boundaries)
+        # Rerun to update the min/max constraints of the number inputs
+        st.rerun()
+
+    final_boundaries = st.session_state.get(boundaries_key, [])
+    return [min_val] + final_boundaries + [max_val] if final_boundaries else None
 
 def render_plotting_component(dataframes, filenames):
     """
@@ -108,6 +171,18 @@ def render_plotting_component(dataframes, filenames):
     y_axis = st.selectbox("Y-axis", columns, 
                          index=columns.index(default_y) if default_y in columns else 0, 
                          key="y_axis")
+    
+    # --- Binning controls for numerical dimensions ---
+    primary_bin_edges = None
+    secondary_bin_edges = None
+
+    if primary_dim and is_numerical_column(dataframes[0], primary_dim) and dataframes[0][primary_dim].nunique() > 5:
+        primary_bin_edges = render_binning_controls(dataframes[0], primary_dim, "primary")
+        st.divider()
+
+    if secondary_dim not in [None, "None"] and is_numerical_column(dataframes[0], secondary_dim) and dataframes[0][secondary_dim].nunique() > 5:
+        secondary_bin_edges = render_binning_controls(dataframes[0], secondary_dim, "secondary")
+        st.divider()
     
     # Add checkbox for outliers
     show_outliers = st.checkbox("Show outliers", value=False, key="show_outliers")
@@ -222,7 +297,9 @@ def render_plotting_component(dataframes, filenames):
             'plot_titles': plot_titles,
             'axes_label_mode': axes_label_mode,
             'x_label': x_label,
-            'y_label': y_label
+            'y_label': y_label,
+            'primary_bin_edges': primary_bin_edges,
+            'secondary_bin_edges': secondary_bin_edges
         }
     
     # Show plots if they've been generated
@@ -233,7 +310,8 @@ def generate_individual_boxplots(dataframes, filenames, primary_dim, secondary_d
                                show_titles=False, comparison_mode="Separate", 
                                show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, 
                                fig_height_cm=None, output_format="PNG", plot_titles=None,
-                               axes_label_mode="Auto", x_label=None, y_label=None):
+                               axes_label_mode="Auto", x_label=None, y_label=None,
+                               primary_bin_edges=None, secondary_bin_edges=None):
     """
     Generate separate boxplots for each dataframe
     """
@@ -244,7 +322,7 @@ def generate_individual_boxplots(dataframes, filenames, primary_dim, secondary_d
         st.markdown(f"### {os.path.splitext(filename)[0]}")
         
         # Preprocess data
-        modified_df = preprocess_data(df, primary_dim, secondary_dim)
+        modified_df = preprocess_data(df, primary_dim, secondary_dim, primary_bin_edges, secondary_bin_edges)
         
         try:
             # Get plot title if provided
@@ -288,23 +366,41 @@ def generate_individual_boxplots(dataframes, filenames, primary_dim, secondary_d
     if need_zip and plot_buffers:
         create_zip_download(plot_buffers, output_format.lower())
 
-def preprocess_data(df, primary_dim, secondary_dim):
-    """Process data for visualization, handling numerical columns"""
+def preprocess_data(df, primary_dim, secondary_dim, primary_bin_edges=None, secondary_bin_edges=None):
+    """Process data for visualization, handling numerical columns by binning."""
     modified_df = df.copy()
-    numerical_warning_shown = False
-    
-    # Process primary dimension if numerical with many unique values
-    if is_numerical_column(df, primary_dim) and df[primary_dim].nunique() > 10:
-        if not numerical_warning_shown:
-            st.warning("Numerical column with many unique values detected. Binning into groups (not fully implemented).")
-            numerical_warning_shown = True
-        modified_df[primary_dim] = bin_numerical_data(df, primary_dim)
-    
-    # Process secondary dimension if it exists and is numerical with many unique values
-    if secondary_dim and is_numerical_column(df, secondary_dim) and df[secondary_dim].nunique() > 10:
-        if not numerical_warning_shown:
-            st.warning("Numerical column with many unique values detected. Binning into groups (not fully implemented).")
-        modified_df[secondary_dim] = bin_numerical_data(df, secondary_dim)
+
+    def _apply_binning(series, bin_edges, column_name):
+        if not bin_edges or len(bin_edges) < 2:
+            return series
+
+        # Ensure bins are unique and sorted
+        bins = sorted(list(set(bin_edges)))
+        if len(bins) < 2:
+            return series
+
+        # Create labels like [start-end) and [start-end] for the last one
+        labels = []
+        for i in range(len(bins) - 1):
+            start, end = bins[i], bins[i+1]
+            if i < len(bins) - 2:
+                labels.append(f"[{start:g} - {end:g})")
+            else:
+                labels.append(f"[{start:g} - {end:g}]")
+        
+        try:
+            # Use right=False for [left, right) intervals
+            return pd.cut(series, bins=bins, labels=labels, right=False, include_lowest=True)
+        except ValueError as e:
+            # This can happen if all values fall outside the bins
+            st.warning(f"Could not apply binning on '{column_name}': {e}. Values might be outside the specified range.")
+            return series
+
+    if primary_dim and primary_bin_edges:
+        modified_df[primary_dim] = _apply_binning(modified_df[primary_dim], primary_bin_edges, primary_dim)
+
+    if secondary_dim and secondary_bin_edges:
+        modified_df[secondary_dim] = _apply_binning(modified_df[secondary_dim], secondary_bin_edges, secondary_dim)
     
     return modified_df
 
