@@ -24,6 +24,50 @@ def _get_unique_values(series):
     # Filter out any null/NaN values
     return [v for v in uniques if pd.notna(v)]
 
+def _calculate_y_lims_no_outliers(data_groups):
+    """
+    Calculates y-axis limits from a list of data arrays for a boxplot.
+    The limits are based on the min/max of the 1.5*IQR whiskers.
+    """
+    if not data_groups:
+        return None, None
+
+    min_vals = []
+    max_vals = []
+
+    for group in data_groups:
+        # Ensure group is a numpy array and not empty
+        group = np.asarray(group)
+        if group.size == 0:
+            continue
+        
+        q1, q3 = np.percentile(group, [25, 75])
+        iqr = q3 - q1
+        
+        lower_whisker_bound = q1 - 1.5 * iqr
+        upper_whisker_bound = q3 + 1.5 * iqr
+        
+        # Find the actual data points that are the whiskers
+        non_outliers = group[(group >= lower_whisker_bound) & (group <= upper_whisker_bound)]
+        
+        if non_outliers.size > 0:
+            min_vals.append(np.min(non_outliers))
+            max_vals.append(np.max(non_outliers))
+
+    if not min_vals:
+        return None, None
+
+    # Add a 5% margin to the limits
+    global_min = min(min_vals)
+    global_max = max(max_vals)
+    margin = (global_max - global_min) * 0.05
+    
+    # Handle case where margin is zero
+    if margin == 0:
+        margin = abs(global_min) * 0.05 if abs(global_min) > 0 else 0.1
+
+    return global_min - margin, global_max + margin
+
 def get_pastel_colors(n):
     """
     Generate a list of pastel colors for the plots
@@ -124,16 +168,36 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
         secondary_values = try_numeric_sort(secondary_values_unique)
         colors = get_pastel_colors(len(secondary_values))
         
-        # Calculate positions and collect data
+        n_sec = len(secondary_values)
+        if n_sec == 0:
+            # Fallback if no secondary values found
+            return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
+                                          show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
+                                          axes_label_mode, x_label, y_label)
+
+        # --- New Boxplot Positioning Logic ---
+        # Total width for a group of boxes for one primary category
+        total_group_width = 0.8 
+        # Width of a single box, adjusted for the number of secondary categories
+        box_width = total_group_width / n_sec
+        
         positions = []
         data = []
         box_indices = {}  # Map to track box indices
         
+        # The positions for the primary categories (e.g., 0, 1, 2, ...)
+        primary_positions = np.arange(len(primary_values))
+
         for i, prim_val in enumerate(primary_values):
+            # Calculate the offset for each secondary box from the center of the primary position
             for j, sec_val in enumerate(secondary_values):
                 subset = df[(df[primary_dim] == prim_val) & (df[secondary_dim] == sec_val)]
                 if not subset.empty:
-                    pos = i + j * 0.25
+                    # Calculate position for this specific box
+                    # The term (j - (n_sec - 1) / 2.0) centers the group of boxes around 0
+                    offset = (j - (n_sec - 1) / 2.0) * box_width
+                    pos = primary_positions[i] + offset
+                    
                     positions.append(pos)
                     data.append(subset[y_axis].values)
                     box_indices[(i, j)] = len(positions) - 1
@@ -145,13 +209,14 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
             # Return an empty figure if no data
             return fig
         
+        # Use a width slightly smaller than box_width to create a gap
         bp = ax.boxplot(data, positions=positions, patch_artist=True, 
-                       labels=[""] * len(positions), widths=0.15,
+                       labels=[""] * len(positions), widths=box_width * 0.9,
                        showfliers=show_outliers,
                        medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
         
-        # Set primary dimension tick positions and labels
-        ax.set_xticks([i + 0.125 * (len(secondary_values) - 1) for i in range(len(primary_values))])
+        # Set primary dimension tick positions and labels to the center of each group
+        ax.set_xticks(primary_positions)
         ax.set_xticklabels(primary_values)
         
         # Color boxes by secondary dimension
@@ -161,13 +226,15 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
                     idx = box_indices[(i, j)]
                     bp['boxes'][idx].set_facecolor(colors[j])
         
-        # Add legend - enhanced size with larger font
+        # --- New Legend Positioning ---
         legend_elements = [
             Patch(facecolor=colors[j], edgecolor='black', label=str(sec_val))
             for j, sec_val in enumerate(secondary_values)
         ]
-        ax.legend(handles=legend_elements, title=secondary_dim, loc='upper right',
-                 fontsize=FONT_SIZE_LEGEND, title_fontsize=FONT_SIZE_LEGEND_TITLE)
+        # Place legend to the right of the plot, similar to stacked mode
+        fig.legend(handles=legend_elements, title=secondary_dim, 
+                  bbox_to_anchor=(0.90, 0.5), loc='center left',
+                  fontsize=FONT_SIZE_LEGEND, title_fontsize=FONT_SIZE_LEGEND_TITLE)
         
     else:
         # Simple boxplot with primary dimension only
@@ -195,6 +262,13 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
         for i, box in enumerate(bp['boxes']):
             box.set_facecolor(colors[i % len(colors)])
     
+    # Adjust y-axis limits if outliers are not shown
+    if not show_outliers:
+        data_for_limits = data if secondary_dim else grouped_data
+        min_y, max_y = _calculate_y_lims_no_outliers(data_for_limits)
+        if min_y is not None and max_y is not None:
+            ax.set_ylim(min_y, max_y)
+    
     # Customize plot
     if show_titles and title:
         ax.set_title(_sanitize_text(title), fontsize=FONT_SIZE_TITLE)
@@ -219,6 +293,11 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     
     # Tighter layout with less padding
     plt.tight_layout(pad=1.0)
+    
+    # Additional adjustment for the legend on the right
+    if secondary_dim:
+        plt.subplots_adjust(right=0.85)
+    
     return fig
 
 def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, title, 
@@ -335,11 +414,21 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
                 continue
             
             # Set y-axis limits based on this subplot's data only
-            if not sec_df.empty:
-                y_min = sec_df[y_axis].min()
-                y_max = sec_df[y_axis].max()
-                padding = (y_max - y_min) * 0.05 if y_max > y_min else y_max * 0.05
-                ax.set_ylim(y_min - padding, y_max + padding)
+            if not show_outliers:
+                # Calculate limits based on whiskers if outliers are hidden
+                min_y, max_y = _calculate_y_lims_no_outliers(grouped_data)
+                if min_y is not None and max_y is not None:
+                    ax.set_ylim(min_y, max_y)
+            else:
+                # When showing outliers, set limits to include them with some padding
+                if not sec_df.empty:
+                    y_min = sec_df[y_axis].min()
+                    y_max = sec_df[y_axis].max()
+                    if pd.notna(y_min) and pd.notna(y_max):
+                        padding = (y_max - y_min) * 0.05 if y_max > y_min else abs(y_max) * 0.05
+                        if padding == 0:
+                            padding = 0.1 # Default padding if range is zero
+                        ax.set_ylim(y_min - padding, y_max + padding)
         
         # Set axis labels based on mode
         x_axis_label = x_label if axes_label_mode == "Manual" and x_label else primary_dim
