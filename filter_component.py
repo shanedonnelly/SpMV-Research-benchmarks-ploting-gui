@@ -352,7 +352,7 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
             df_column_series = df_copy[column]
 
             is_categorical_type = isinstance(df_column_series.dtype, pd.CategoricalDtype)
-            is_low_cardinality_obj = (
+            is_low_cardinality_obj_not_numeric = (
                 not df_column_series.empty and
                 df_column_series.nunique() < max_unique and
                 is_object_dtype(df_column_series) and # Ensure it's object type for low cardinality non-numeric
@@ -360,7 +360,7 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
             )
             
             # Refined conditions for filter types
-            if is_categorical_type or is_low_cardinality_obj or \
+            if is_categorical_type or is_low_cardinality_obj_not_numeric or \
                (df_column_series.nunique() < max_unique and not is_numeric_dtype(df_column_series) and not is_datetime64_any_dtype(df_column_series)):
                 _handle_categorical_filter(df_column_series, column, right)
             elif is_numeric_dtype(df_column_series):
@@ -372,7 +372,7 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
             
             # Apply filter to intermediate_filtered_df if "OK"/"Apply" was pressed for this column
             if column in st.session_state.filters_applied and st.session_state.filters_applied[column]:
-                if is_categorical_type or is_low_cardinality_obj or \
+                if is_categorical_type or is_low_cardinality_obj_not_numeric or \
                    (df_column_series.nunique() < max_unique and not is_numeric_dtype(df_column_series) and not is_datetime64_any_dtype(df_column_series)):
                     selected_vals = st.session_state.get(f"{column}_applied_selected_values", [])
                     intermediate_filtered_df = intermediate_filtered_df[intermediate_filtered_df[column].isin(selected_vals)]

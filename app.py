@@ -234,13 +234,6 @@ def main():
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Data Filtering"
     
-    # # Settings icon at top right
-    # col1, col2 = st.columns([20, 1])
-    # with col2:
-    #     if st.button("⚙️"):
-    #         st.session_state.show_settings = not st.session_state.show_settings
-    #         st.rerun()
-    
     # Show settings dialog if needed
     if st.session_state.show_settings:
         show_settings()
