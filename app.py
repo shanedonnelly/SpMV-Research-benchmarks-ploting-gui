@@ -26,10 +26,10 @@ st.markdown("""
     }
     
     button[aria-controls="tabs-bui2-tabpanel-0"] p {
-  font-size: 1.4rem; /* équivaut à environ 24px si 1rem = 16px */
+  font-size: 1.2rem; /* équivaut à environ 24px si 1rem = 16px */
 }
     button[aria-controls="tabs-bui2-tabpanel-1"] p {
-  font-size: 1.4rem; /* équivaut à environ 24px si 1rem = 16px */
+  font-size: 1.2rem; /* équivaut à environ 24px si 1rem = 16px */
 }
 
     </style>
