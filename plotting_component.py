@@ -4,6 +4,8 @@ import os
 import io
 import zipfile
 import numpy as np
+import math
+from PIL import Image, ImageDraw, ImageFont
 from matplotlib_interface import (
     create_side_by_side_plot, 
     create_stacked_plots, 
@@ -143,7 +145,9 @@ def render_plotting_component(dataframes, filenames):
                     "y_axis", "show_titles", "comparison_mode", "plot_params",
                     "show_outliers", "fig_size_mode", "fig_width_cm", 
                     "fig_height_cm", "output_format", "plot_titles",
-                    "axes_label_mode", "x_axis_label", "y_axis_label"
+                    "axes_label_mode", "x_axis_label", "y_axis_label",
+                    "combine_plots", "combined_plot_title",
+                    "grid_layout_mode", "grid_rows", "grid_cols"
                 ]:
                     del st.session_state[key]
             st.rerun()
@@ -258,6 +262,36 @@ def render_plotting_component(dataframes, filenames):
                                                     value=default_title, 
                                                     key=f"title_{i}")
     
+    # New feature: Combine plots
+    combine_plots = False
+    combined_plot_title = ""
+    if len(dataframes) > 1:
+        combine_plots = st.checkbox(
+            "Combine plots into a single image", 
+            value=False, 
+            key="combine_plots", 
+            # help="Combine all plots into a single grid image. Only available for multiple subsets."
+        )
+        if combine_plots:
+            combined_plot_title = st.text_input(
+                "Overall plot title", 
+                value="", 
+                key="combined_plot_title", 
+                placeholder="Optional title for the combined plot"
+            )
+            st.segmented_control(
+                "Grid Layout",
+                ["Auto", "Manual"],
+                key="grid_layout_mode",
+                default="Auto"
+            )
+            if st.session_state.get("grid_layout_mode") == "Manual":
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.number_input("Rows", min_value=1, value=1, key="grid_rows")
+                with col2:
+                    st.number_input("Columns", min_value=1, value=1, key="grid_cols")
+
     # Generate plot button with styling
     st.markdown(
         """
@@ -275,13 +309,7 @@ def render_plotting_component(dataframes, filenames):
         # Convert secondary_dim to None if "None" is selected
         secondary_dimension = None if secondary_dim == "None" else secondary_dim
         
-        # Build list of group by dimensions
-        group_by_cols = [primary_dim]
-        if secondary_dimension:
-            group_by_cols.append(secondary_dimension)
-        
-        st.session_state.plots_generated = True
-        st.session_state.plot_params = {
+        st.session_state.last_plot_params = {
             'dataframes': dataframes,
             'filenames': filenames,
             'primary_dim': primary_dim,
@@ -299,22 +327,78 @@ def render_plotting_component(dataframes, filenames):
             'x_label': x_label,
             'y_label': y_label,
             'primary_bin_edges': primary_bin_edges,
-            'secondary_bin_edges': secondary_bin_edges
+            'secondary_bin_edges': secondary_bin_edges,
+            'combine_plots': combine_plots,
+            'combined_plot_title': combined_plot_title,
+            'grid_layout_mode': st.session_state.get('grid_layout_mode', 'Auto'),
+            'grid_rows': st.session_state.get('grid_rows', 1),
+            'grid_cols': st.session_state.get('grid_cols', 1)
         }
-    
-    # Show plots if they've been generated
-    if st.session_state.plots_generated:
-        generate_individual_boxplots(**st.session_state.plot_params)
+        # Clear any previous cache when generating a new plot
+        if 'combined_plot_cache' in st.session_state:
+            del st.session_state.combined_plot_cache
+        if 'combined_plot_cache_key' in st.session_state:
+            del st.session_state.combined_plot_cache_key
+
+
+    # Show plots if they've been generated and parameters haven't changed
+    if 'last_plot_params' in st.session_state:
+        secondary_dimension = None if secondary_dim == "None" else secondary_dim
+        current_params_check = {
+            'dataframes': dataframes, 'filenames': filenames, 'primary_dim': primary_dim,
+            'secondary_dim': secondary_dimension, 'y_axis': y_axis, 'show_titles': show_titles,
+            'comparison_mode': comparison_mode, 'show_outliers': show_outliers,
+            'fig_size_mode': fig_size_mode, 'fig_width_cm': fig_width_cm, 'fig_height_cm': fig_height_cm,
+            'output_format': output_format, 'plot_titles': plot_titles, 'axes_label_mode': axes_label_mode,
+            'x_label': x_label, 'y_label': y_label, 'primary_bin_edges': primary_bin_edges,
+            'secondary_bin_edges': secondary_bin_edges, 'combine_plots': combine_plots,
+            'combined_plot_title': combined_plot_title,
+            'grid_layout_mode': st.session_state.get('grid_layout_mode', 'Auto'),
+            'grid_rows': st.session_state.get('grid_rows', 1),
+            'grid_cols': st.session_state.get('grid_cols', 1)
+        }
+        
+        # To avoid the "truth value of a DataFrame is ambiguous" error,
+        # we compare the parameters without the dataframes themselves.
+        # The list of filenames serves as a proxy for the data.
+        params_for_comparison_current = current_params_check.copy()
+        params_for_comparison_last = st.session_state.last_plot_params.copy()
+        del params_for_comparison_current['dataframes']
+        del params_for_comparison_last['dataframes']
+
+        # # If params have changed, inform the user and don't show the plot
+        # if params_for_comparison_current != params_for_comparison_last:
+        #     st.info("Plot settings have changed. Click 'Generate Plot' to update.")
+        # else:
+        if not params_for_comparison_current != params_for_comparison_last:
+            generate_individual_boxplots(**st.session_state.last_plot_params)
 
 def generate_individual_boxplots(dataframes, filenames, primary_dim, secondary_dim, y_axis, 
                                show_titles=False, comparison_mode="Separate", 
                                show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, 
                                fig_height_cm=None, output_format="PNG", plot_titles=None,
                                axes_label_mode="Auto", x_label=None, y_label=None,
-                               primary_bin_edges=None, secondary_bin_edges=None):
+                               primary_bin_edges=None, secondary_bin_edges=None,
+                               combine_plots=False, combined_plot_title="",
+                               grid_layout_mode="Auto", grid_rows=3, grid_cols=3):
     """
-    Generate separate boxplots for each dataframe
+    Generate separate boxplots for each dataframe, or a single combined plot.
     """
+    # If combine plots is selected, call the dedicated function and exit
+    if combine_plots and len(dataframes) > 1:
+        generate_combined_plot(
+            dataframes=dataframes, filenames=filenames, primary_dim=primary_dim, 
+            secondary_dim=secondary_dim, y_axis=y_axis, show_titles=show_titles, 
+            comparison_mode=comparison_mode, show_outliers=show_outliers, 
+            fig_size_mode=fig_size_mode, fig_width_cm=fig_width_cm, 
+            fig_height_cm=fig_height_cm, output_format=output_format, 
+            plot_titles=plot_titles, axes_label_mode=axes_label_mode, 
+            x_label=x_label, y_label=y_label, primary_bin_edges=primary_bin_edges, 
+            secondary_bin_edges=secondary_bin_edges, combined_plot_title=combined_plot_title,
+            grid_layout_mode=grid_layout_mode, grid_rows=grid_rows, grid_cols=grid_cols
+        )
+        return
+
     plot_buffers = []
     need_zip = len(dataframes) > 1
     
@@ -365,6 +449,184 @@ def generate_individual_boxplots(dataframes, filenames, primary_dim, secondary_d
     # Add zip download option if multiple plots
     if need_zip and plot_buffers:
         create_zip_download(plot_buffers, output_format.lower())
+
+def generate_combined_plot(dataframes, filenames, primary_dim, secondary_dim, y_axis, 
+                           show_titles=False, comparison_mode="Separate", 
+                           show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, 
+                           fig_height_cm=None, output_format="PNG", plot_titles=None,
+                           axes_label_mode="Auto", x_label=None, y_label=None,
+                           primary_bin_edges=None, secondary_bin_edges=None,
+                           combined_plot_title="",
+                           grid_layout_mode="Auto", grid_rows=3, grid_cols=3):
+    """
+    Generates all plots and combines them into a single grid image using Pillow,
+    dynamically resizing to avoid decompression bomb warnings.
+    """
+    # --- Manual Caching Logic ---
+    # Create a hashable key from all function parameters
+    cache_key = (
+        tuple(filenames), primary_dim, secondary_dim, y_axis, show_titles,
+        comparison_mode, show_outliers, fig_size_mode, fig_width_cm,
+        fig_height_cm, output_format, str(plot_titles), axes_label_mode,
+        x_label, y_label, str(primary_bin_edges), str(secondary_bin_edges),
+        combined_plot_title, grid_layout_mode, grid_rows, grid_cols
+    )
+
+    # If the key matches the cached one, display the cached content and exit
+    if st.session_state.get('combined_plot_cache_key') == cache_key:
+        cached_data = st.session_state.combined_plot_cache
+        st.image(cached_data['image'], caption="Combined Plot")
+        st.download_button(**cached_data['download_args'])
+        return
+    # --- End of Caching Logic ---
+
+    with st.spinner("Generating combined plot... This may take a moment."):
+        try:
+            image_buffers = []
+            # 1. Generate all plots and store them in memory
+            for df, filename in zip(dataframes, filenames):
+                modified_df = preprocess_data(df, primary_dim, secondary_dim, primary_bin_edges, secondary_bin_edges)
+                
+                title = plot_titles.get(filename, os.path.splitext(filename)[0]) if show_titles else None
+                
+                plot_func = create_side_by_side_plot if comparison_mode == "Side by Side" else create_stacked_plots
+                
+                fig = plot_func(modified_df, primary_dim, secondary_dim, y_axis, 
+                                show_titles, title, show_outliers, 
+                                fig_size_mode, fig_width_cm, fig_height_cm,
+                                axes_label_mode, x_label, y_label)
+                
+                buffer = save_plot_to_buffer(fig, format='png')
+                image_buffers.append(buffer)
+
+            if not image_buffers:
+                st.warning("No plots were generated to combine.")
+                return
+
+            # 2. Process images with Pillow
+            images = [Image.open(buf) for buf in image_buffers]
+
+            # 3. Calculate grid dimensions and determine max plot size to avoid decompression bomb warning
+            num_images = len(images)
+            if grid_layout_mode == "Manual":
+                rows = grid_rows
+                cols = grid_cols
+                if rows * cols < num_images:
+                    st.warning(f"Manual grid ({rows}x{cols}) is too small for {num_images} plots. Falling back to auto layout.")
+                    cols = math.ceil(math.sqrt(num_images))
+                    rows = math.ceil(num_images / cols)
+            else: # Auto mode
+                cols = math.ceil(math.sqrt(num_images))
+                rows = math.ceil(num_images / cols)
+
+            # Get the Pillow decompression bomb limit (use a safe default if the attribute doesn't exist)
+            Pillow_limit = getattr(Image, 'MAX_IMAGE_PIXELS', 89478485)
+
+            # Calculate the max dimension per plot to stay under the limit, with a small safety margin
+            if cols * rows > 0:
+                max_pixels_per_plot = (Pillow_limit / (cols * rows)) * 0.99
+                max_dim_allowed_by_limit = math.floor(math.sqrt(max_pixels_per_plot))
+            else:
+                max_dim_allowed_by_limit = 1200 # Default value if no images
+
+            # Also enforce a user-defined "reasonable" max size for a single plot
+            USER_MAX_PLOT_DIM = 1200
+            
+            # The final dimension for each square plot is the minimum of these constraints
+            max_dim = min(USER_MAX_PLOT_DIM, max_dim_allowed_by_limit)
+
+            # Use Image.Resampling.LANCZOS for high quality downscaling (Pillow >= 9.1.0)
+            resample_filter = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+
+            squared_images = []
+            for img in images:
+                # Resize the original image to fit within a max_dim box, preserving aspect ratio
+                img.thumbnail((max_dim, max_dim), resample_filter)
+                
+                # Create a new white square canvas
+                square_img = Image.new('RGB', (max_dim, max_dim), 'white')
+                
+                # Paste the (possibly resized) image onto the center of the square canvas
+                paste_pos = ((max_dim - img.width) // 2, (max_dim - img.height) // 2)
+                square_img.paste(img, paste_pos, img if img.mode == 'RGBA' else None)
+                squared_images.append(square_img)
+
+            # 4. Create final canvas and add title
+            title_height = 0
+            title_font_size = max(15, int(max_dim / 25))
+            try:
+                font = ImageFont.truetype("DejaVuSans.ttf", title_font_size)
+            except IOError:
+                try: # Pillow >= 10.0.0
+                    font = ImageFont.load_default().font_variant(size=title_font_size)
+                except AttributeError: # Pillow < 10.0.0
+                    font = ImageFont.load_default(size=title_font_size)
+
+            if combined_plot_title:
+                dummy_draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+                try: # Modern Pillow
+                    bbox = dummy_draw.textbbox((0, 0), combined_plot_title, font=font)
+                    title_width = bbox[2] - bbox[0]
+                    title_height = (bbox[3] - bbox[1]) + int(title_font_size * 0.5) # Padding
+                except AttributeError: # Older Pillow
+                    title_width, legacy_h = dummy_draw.textsize(combined_plot_title, font=font)
+                    title_height = legacy_h + int(title_font_size * 0.5)
+
+            grid_width = cols * max_dim
+            final_width = grid_width
+            final_height = (rows * max_dim) + title_height
+
+            final_image = Image.new('RGB', (final_width, final_height), 'white')
+            draw = ImageDraw.Draw(final_image)
+
+            if combined_plot_title:
+                title_x = (final_width - title_width) / 2 if title_width < final_width else 0
+                draw.text((title_x, title_height / 4), combined_plot_title, fill='black', font=font)
+
+            # 5. Paste squared images onto the grid
+            for i, img in enumerate(squared_images):
+                row_idx = i // cols
+                col_idx = i % cols
+                paste_x = col_idx * max_dim
+                paste_y = (row_idx * max_dim) + title_height
+                final_image.paste(img, (paste_x, paste_y))
+
+            # 6. Display and provide download
+            st.image(final_image, caption="Combined Plot")
+
+            final_buffer = io.BytesIO()
+            final_format = output_format.lower()
+            
+            if final_format == 'pdf':
+                final_image.save(final_buffer, format='PDF', resolution=100.0, save_all=True)
+            else: # PNG
+                final_image.save(final_buffer, format='PNG')
+            
+            final_buffer.seek(0)
+            
+            extension = "pdf" if final_format == "pdf" else "png"
+            mime_type = "application/pdf" if final_format == "pdf" else "image/png"
+
+            download_args = {
+                "label": f"Download Combined Plot as {extension.upper()}",
+                "data": final_buffer,
+                "file_name": f"combined_plot.{extension}",
+                "mime": mime_type,
+                "key": "download_combined_plot"
+            }
+            st.download_button(**download_args)
+
+            # Store results in the manual cache
+            st.session_state.combined_plot_cache_key = cache_key
+            st.session_state.combined_plot_cache = {
+                'image': final_image,
+                'download_args': download_args
+            }
+
+        except Exception as e:
+            st.error(f"Error generating combined plot: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
 
 def preprocess_data(df, primary_dim, secondary_dim, primary_bin_edges=None, secondary_bin_edges=None):
     """Process data for visualization, handling numerical columns by binning."""
