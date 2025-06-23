@@ -24,6 +24,14 @@ st.markdown("""
         padding-bottom: 2rem;
         margin: 0 auto;
     }
+    
+    button[aria-controls="tabs-bui2-tabpanel-0"] p {
+  font-size: 1.4rem; /* équivaut à environ 24px si 1rem = 16px */
+}
+    button[aria-controls="tabs-bui2-tabpanel-1"] p {
+  font-size: 1.4rem; /* équivaut à environ 24px si 1rem = 16px */
+}
+
     </style>
 """, unsafe_allow_html=True)
 
@@ -226,12 +234,12 @@ def main():
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Data Filtering"
     
-    # Settings icon at top right
-    col1, col2 = st.columns([20, 1])
-    with col2:
-        if st.button("⚙️"):
-            st.session_state.show_settings = not st.session_state.show_settings
-            st.rerun()
+    # # Settings icon at top right
+    # col1, col2 = st.columns([20, 1])
+    # with col2:
+    #     if st.button("⚙️"):
+    #         st.session_state.show_settings = not st.session_state.show_settings
+    #         st.rerun()
     
     # Show settings dialog if needed
     if st.session_state.show_settings:
