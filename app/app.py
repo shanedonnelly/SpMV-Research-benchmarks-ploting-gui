@@ -6,13 +6,44 @@ import glob
 import re
 from filter_component import filter_dataframe
 from plotting_page import show_plotting_page
-from setup import convert_csv_to_pickle
 
 # Set page config
-
-# convert_csv_to_pickle()
-
 st.set_page_config(page_title="Benchmark Plotting App", page_icon="./logo.jpeg")
+
+def setup_application():
+    """
+    Ensures directories, config, and pickle files are correctly set up.
+    This runs on every app start. No notifications are emitted.
+    """
+    # 1. Ensure directories exist
+    for directory in ('csv', 'pickle', 'subset_pickle'):
+        os.makedirs(directory, exist_ok=True)
+
+    # 2. Initialize config file if missing
+    if not os.path.exists('config.ini'):
+        config = configparser.ConfigParser()
+        config['General'] = {
+            'max_unique': '50',
+            'show_df_by_default': 'False'
+        }
+        with open('config.ini', 'w') as configfile:
+            config.write(configfile)
+
+    # 3. Synchronize CSV and Pickle files
+    csv_paths = glob.glob(os.path.join('csv', '*.csv'))
+    pkl_paths = glob.glob(os.path.join('pickle', '*.pkl'))
+
+    csv_basenames = {os.path.splitext(os.path.basename(p))[0] for p in csv_paths}
+    pkl_basenames = {os.path.splitext(os.path.basename(p))[0] for p in pkl_paths}
+
+    # a) Create missing pickles
+    for name in csv_basenames - pkl_basenames:
+        df = pd.read_csv(os.path.join('csv', f"{name}.csv"))
+        df.to_pickle(os.path.join('pickle', f"{name}.pkl"))
+
+    # b) Remove orphan pickles
+    for name in pkl_basenames - csv_basenames:
+        os.remove(os.path.join('pickle', f"{name}.pkl"))
 
 
 # Add CSS to limit width of components
@@ -34,14 +65,6 @@ st.markdown("""
 
     </style>
 """, unsafe_allow_html=True)
-
-# Create directories if they don't exist
-def ensure_directories():
-    directories = ['pickle', 'subset_pickle']
-    for directory in directories:
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-            st.warning(f"Created missing directory: {directory}")
 
 # Load configuration
 def load_config():
@@ -161,22 +184,27 @@ def show_data_filtering():
     pickle_files = get_pickle_files()
     
     if not pickle_files:
-        st.warning("No pickle files found. Please add CSV files to the csv/ folder and run setup.py.")
+        st.warning("No pickle files found. Please add CSV files to the csv/ folder.")
+        st.info("The application will automatically convert them to pickle files on the next run.")
         return
     
     # Initialize session state for dataframe selection
-    if 'selected_df_file' not in st.session_state:
-        st.session_state.selected_df_file = pickle_files[0]
-    if 'current_df' not in st.session_state:
+    if 'selected_df_file' not in st.session_state or st.session_state.selected_df_file not in pickle_files:
+        st.session_state.selected_df_file = pickle_files[0] if pickle_files else None
+    
+    if st.session_state.selected_df_file and 'current_df' not in st.session_state:
         st.session_state.current_df = pd.read_pickle(f"pickle/{st.session_state.selected_df_file}")
     
+    if not st.session_state.selected_df_file:
+        st.stop()
+
     # Dataframe selector with properly aligned OK button
     col1, col2 = st.columns([3, 1])
     with col1:
         new_selection = st.selectbox(
             "Select DataFrame",
             options=pickle_files,
-            index=pickle_files.index(st.session_state.selected_df_file) if st.session_state.selected_df_file in pickle_files else 0
+            index=pickle_files.index(st.session_state.selected_df_file)
         )
 
     # Add vertical space to align button with dropdown, not label
@@ -225,8 +253,8 @@ def show_data_filtering():
 
 
 def main():
-    # Ensure directories exist
-    ensure_directories()
+    # Run setup at the beginning of the app
+    setup_application()
     
     # Initialize session state
     if 'show_settings' not in st.session_state:
