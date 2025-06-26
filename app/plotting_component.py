@@ -420,14 +420,27 @@ def display_combined_plot(dataframes, filenames, **kwargs):
     Handles the logic for displaying a combined plot, including caching.
     """
     # --- Manual Caching Logic ---
-    # Create a hashable key from all function parameters
-    # Convert list of dataframes to a tuple of filenames for the key
-    cache_key_params = kwargs.copy()
+    # Create a hashable key from all function parameters.
+    # The previous implementation failed because dicts (like plot_titles) and lists 
+    # (like bin_edges) are not hashable and cannot be part of a cache key.
     
-    # Create a hashable key from all function parameters
+    # We now convert mutable items to their immutable, hashable counterparts.
+    hashable_items = []
+    # Sort by key to ensure the order is always consistent
+    for key, value in sorted(kwargs.items()):
+        if isinstance(value, dict):
+            # Convert dict to a frozenset of its items
+            hashable_items.append((key, frozenset(value.items())))
+        elif isinstance(value, list):
+            # Convert list to a tuple
+            hashable_items.append((key, tuple(value)))
+        else:
+            # Assume other types are hashable
+            hashable_items.append((key, value))
+    
     cache_key = (
-        tuple(filenames), 
-        frozenset(cache_key_params.items())
+        tuple(filenames),
+        tuple(hashable_items)
     )
 
     if st.session_state.get('combined_plot_cache_key') == cache_key:
