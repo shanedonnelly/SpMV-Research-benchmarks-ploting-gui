@@ -7,14 +7,7 @@ WORKDIR /app
 # Copier d'abord le fichier des dépendances pour profiter du cache Docker
 COPY requirements.txt .
 
-# Installer les dépendances système pour Pillow, installer les paquets Python, puis nettoyer
-# Cela permet de garder l'image finale la plus petite possible
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libjpeg62-turbo-dev zlib1g-dev && \
-    pip install --no-cache-dir -r requirements.txt && \
-    apt-get purge -y --auto-remove gcc && \
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le code de l'application dans le conteneur
 COPY ./app .

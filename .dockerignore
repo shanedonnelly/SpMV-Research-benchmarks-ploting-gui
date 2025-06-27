@@ -1,0 +1,6 @@
+app/csv
+app/pickle
+app/subset_pickle
+__pycache__
+*.pyc
+venv
