@@ -169,11 +169,14 @@ def _handle_numeric_filter(df_col: pd.Series, col_name: str, container: st.conta
         if current_slider_max < current_slider_min: current_slider_max = current_slider_min
         
         slider_vals = (current_slider_min, current_slider_max)
-        new_slider_vals = st.slider(f"Range for {col_name}", col_min_orig, col_max_orig, slider_vals, step, key=f"{col_name}_slider")
-        if new_slider_vals != slider_vals:
-            st.session_state[min_val_key], st.session_state[max_val_key] = new_slider_vals
-            st.session_state[unique_val_key] = None # Clear unique if slider moved
-            st.session_state[pending_key] = True; st.rerun()
+        # Only display the slider if there is an actual range to select from.
+        # This prevents a StreamlitAPIException when min_value == max_value.
+        if col_min_orig < col_max_orig:
+            new_slider_vals = st.slider(f"Range for {col_name}", col_min_orig, col_max_orig, slider_vals, step, key=f"{col_name}_slider")
+            if new_slider_vals != slider_vals:
+                st.session_state[min_val_key], st.session_state[max_val_key] = new_slider_vals
+                st.session_state[unique_val_key] = None # Clear unique if slider moved
+                st.session_state[pending_key] = True; st.rerun()
 
         action_button_cols = st.columns([1,1,8])
         button_type = "primary" if st.session_state.get(pending_key, False) else "secondary"

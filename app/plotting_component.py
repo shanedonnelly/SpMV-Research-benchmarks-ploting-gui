@@ -44,7 +44,8 @@ def render_binning_controls(df, column_name, key_prefix):
     )
 
     if n_bins <= 1:
-        return None
+        # For 1 bin, we create a single range from the minimum to the maximum value.
+        return [min_val, max_val]
 
     # Ensure boundaries are initialized if they don't exist for the current n_bins
     if boundaries_key not in st.session_state or len(st.session_state.get(boundaries_key, [])) != n_bins - 1:
