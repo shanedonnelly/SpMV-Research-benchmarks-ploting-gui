@@ -1,0 +1,1 @@
+[ -z "$(docker images -q spmv-gui:latest)" ] && docker build --no-cache -t spmv-gui:latest . ; docker run -it --rm -p 8501:8501 -v $(pwd)/app/csv:/app/csv -v $(pwd)/app/pickle:/app/pickle -v $(pwd)/app/subset_pickle:/app/subset_pickle spmv-gui

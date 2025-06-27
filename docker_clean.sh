@@ -1,0 +1,1 @@
+docker rmi spmv-gui:latest && docker system prune -f
