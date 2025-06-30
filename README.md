@@ -18,7 +18,7 @@ cd SpMV-Research-benchmarks-plotting-gui/
 ## Usage
 To use it, first copy your CSV files into `app/csv`  or if you want, you can create a symlink with : 
 ```bash
-ln -s /path/to/file.csv /path/to/this/repo/app/csv/file.csv
+python3 create_symlink.py
 ```
 You must put the csv files when the app is not running for keeping the app simple. 
 Then, to run, you can either use of the two running scripts `python_venv_run.sh` and `python_venv_run_clean.sh` : 
