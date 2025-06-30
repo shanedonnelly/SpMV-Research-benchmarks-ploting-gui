@@ -1,4 +1,4 @@
-# SpMV-Research-benchmarks-ploting-gui
+# SpMV-Research-benchmarks-plotting-gui
 ## Description
 This repository provides a fully functional [Streamlit](https://streamlit.io/) app to visualize results from the [SpMV-Research-benchmarks](https://github.com/pmpakos/SpMV-Research-benchmarks). The app allows users to filter CSV files, save them as subsets, and generate boxplots from it. You can choose one Y-axis dimension to plot, and up to two X-axis dimensions. 
 
@@ -12,8 +12,8 @@ This app was developed by my self as part of an internship project at [CSLab](ht
 ## Installation
 To download the app, simply clone this repository : 
 ```bash
-git clone https://github.com/shanedonnelly/SpMV-Research-benchmarks-ploting-gui.git
-cd SpMV-Research-benchmarks-ploting-gui/
+git clone https://github.com/shanedonnelly/SpMV-Research-benchmarks-plotting-gui.git
+cd SpMV-Research-benchmarks-plotting-gui/
 ```
 ## Usage
 To use it, first copy your CSV files into `app/csv`  or if you want, you can create a symlink with : 
