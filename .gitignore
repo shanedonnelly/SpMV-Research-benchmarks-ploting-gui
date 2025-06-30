@@ -1,12 +1,10 @@
 # by me 
 launch.sh
-*.csv
-*.pkl
-*.parquet
-old.py
+app/csv/*
+app/pickle/*
+app/subset_pickle/*
 *.pdf
-TODO.*
-*.ini
+TODO.md
 *.png
 doc.py
 
