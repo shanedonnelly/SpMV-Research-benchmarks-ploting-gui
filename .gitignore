@@ -1,8 +1,14 @@
 # by me 
 launch.sh
 app/csv/*
+!app/csv/.gitkeep
+
 app/pickle/*
+!app/pickle/.gitkeep
+
 app/subset_pickle/*
+!app/subset_pickle/.gitkeep
+
 *.pdf
 TODO.md
 *.png
