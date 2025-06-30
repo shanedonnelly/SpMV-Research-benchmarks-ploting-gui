@@ -18,7 +18,7 @@ cd SpMV-Research-benchmarks-ploting-gui/
 ## Usage
 To use it, first copy your CSV files into `app/csv`  or if you want, you can create a symlink with : 
 ```bash
-ln -s /path/to/file app/csv/synthetic_benchmarks_all-devices_all.csv #Rename with the corresponding file name
+ln -s /path/to/file.csv /path/to/this/repo/app/csv/file.csv
 ```
 You must put the csv files when the app is not running for keeping the app simple. 
 Then, to run, you can either use of the two running scripts `python_venv_run.sh` and `python_venv_run_clean.sh` : 
@@ -30,7 +30,7 @@ Then,
 ```bash 
 ./python_venv_run.sh
 ```
-or 
+or (Wich auto-remove all python dependencies each time to save storage)
 ```bash 
-./python_venv_run_clean.sh #Wich auto-remove all python dependencies each time to save storage
+./python_venv_run_clean.sh
 ```
