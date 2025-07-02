@@ -451,8 +451,8 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
             for j, sec_val in enumerate(secondary_values)
         ]
         
-        # Place legend to the right of the plot
-        fig.legend(handles=legend_elements, title=secondary_dim, 
+        # Place legend to the right of the plot, reversing the order to match plot layout
+        fig.legend(handles=legend_elements[::-1], title=secondary_dim, 
                   bbox_to_anchor=(0.90, 0.5), loc='center left',
                   fontsize=FONT_SIZE_LEGEND, title_fontsize=FONT_SIZE_LEGEND_TITLE)
     
