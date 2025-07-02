@@ -72,12 +72,12 @@ def load_config():
     try:
         config.read('config.ini')
         return {
-            'max_unique': config.getint('General', 'max_unique', fallback=20),
-            'show_df_by_default': config.getboolean('General', 'show_df_by_default', fallback=True)
+            'max_unique': config.getint('General', 'max_unique', fallback=50),
+            'show_df_by_default': config.getboolean('General', 'show_df_by_default', fallback=False)
         }
     except Exception as e:
         st.error(f"Error loading configuration: {str(e)}")
-        return {'max_unique': 20, 'show_df_by_default': True}
+        return {'max_unique': 50, 'show_df_by_default': False}
 
 # Save configuration
 def save_config(max_unique, show_df_by_default):
