@@ -23,15 +23,15 @@ def render_binning_controls(df, column_name, key_prefix):
     n_bins_key = f"plot_{key_prefix}_n_bins"
     boundaries_key = f"plot_{key_prefix}_boundaries"
 
-    # Use a callback on the first slider to reset boundaries when n_bins changes
+    # Use a callback on the slider to reset boundaries when n_bins changes
     def n_bins_changed():
         n_bins = st.session_state[n_bins_key]
-        if n_bins > 1:
-            # Calculate new, equally spaced boundaries
-            new_boundaries = np.linspace(min_val, max_val, n_bins + 1)[1:-1]
-            st.session_state[boundaries_key] = [round(b, 1) for b in new_boundaries]
+        if n_bins > 0:
+            # Calculate new, equally spaced boundaries from min to max
+            new_boundaries = np.linspace(min_val, max_val, n_bins + 1)
+            st.session_state[boundaries_key] = [round(b, 4) for b in new_boundaries]
         elif boundaries_key in st.session_state:
-            # Clear boundaries if n_bins is 1
+            # Clear boundaries if n_bins is 0
             del st.session_state[boundaries_key]
 
     n_bins = st.slider(
@@ -39,63 +39,46 @@ def render_binning_controls(df, column_name, key_prefix):
         min_value=1, max_value=10, step=1,
         key=n_bins_key,
         on_change=n_bins_changed,
-        # Set default value without overwriting existing state
         value=st.session_state.get(n_bins_key, 1)
     )
 
-    if n_bins <= 1:
-        # For 1 bin, we create a single range from the minimum to the maximum value.
-        return [min_val, max_val]
+    if n_bins < 1:
+        return None
 
     # Ensure boundaries are initialized if they don't exist for the current n_bins
-    if boundaries_key not in st.session_state or len(st.session_state.get(boundaries_key, [])) != n_bins - 1:
+    if boundaries_key not in st.session_state or len(st.session_state.get(boundaries_key, [])) != n_bins + 1:
         n_bins_changed()
 
     boundaries = st.session_state.get(boundaries_key, [])
     
     st.caption("Fine-tune range delimiters")
     
-    # Determine step based on column dtype
     is_int = pd.api.types.is_integer_dtype(df[column_name])
     step = 1.0 if is_int else 0.1
     
-    num_inputs = n_bins - 1
-    inputs_per_row = 5
+    num_inputs = n_bins + 1
     new_boundaries = []
     
-    # Create a list of all the number inputs to be created
-    all_input_indices = list(range(num_inputs))
-
-    for i in range(0, num_inputs, inputs_per_row):
-        row_indices = all_input_indices[i:i + inputs_per_row]
-        cols = st.columns(len(row_indices))
-        
-        for j, input_idx in enumerate(row_indices):
-            with cols[j]:
-                # Set min/max for each input to prevent overlap
-                min_b = boundaries[input_idx-1] if input_idx > 0 else min_val
-                max_b = boundaries[input_idx+1] if input_idx < len(boundaries) - 1 else max_val
-                
-                val = st.number_input(
-                    label=f"boundary_{input_idx}",
-                    label_visibility="collapsed",
-                    value=float(boundaries[input_idx]),
-                    min_value=float(min_b),
-                    max_value=float(max_b),
-                    step=step,
-                    format="%.4f",
-                    key=f"{boundaries_key}_input_{input_idx}"
-                )
-                new_boundaries.append(val)
+    # Layout in 2 columns
+    cols = st.columns(2)
+    
+    for i in range(num_inputs):
+        with cols[i % 2]:
+            val = st.number_input(
+                label=f"Delimiter {i+1}",
+                value=float(boundaries[i]),
+                step=step,
+                format="%.4f",
+                key=f"{boundaries_key}_input_{i}"
+            )
+            new_boundaries.append(val)
 
     # Update session state only if there's a change
     if new_boundaries != boundaries:
-        st.session_state[boundaries_key] = sorted(new_boundaries)
-        # Rerun to update the min/max constraints of the number inputs
+        st.session_state[boundaries_key] = new_boundaries
         st.rerun()
 
-    final_boundaries = st.session_state.get(boundaries_key, [])
-    return [min_val] + final_boundaries + [max_val] if final_boundaries else None
+    return st.session_state.get(boundaries_key, [])
 
 def render_plotting_component(dataframes, filenames):
     """

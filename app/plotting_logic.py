@@ -39,17 +39,17 @@ def preprocess_data(df, primary_dim, secondary_dim, primary_bin_edges=None, seco
     def _apply_binning(series, bin_edges, column_name):
         if not bin_edges or len(bin_edges) < 2:
             return series
+        # Ensure bins are sorted and unique to avoid errors with pd.cut
         bins = sorted(list(set(bin_edges)))
         if len(bins) < 2:
             return series
-        labels = []
-        for i in range(len(bins) - 1):
-            start, end = bins[i], bins[i+1]
-            if i < len(bins) - 2:
-                labels.append(f"[{start:g} - {end:g})")
-            else:
-                labels.append(f"[{start:g} - {end:g}]")
+        
+        # Generate labels that strictly reflect the provided bin edges, e.g., [a, b)
+        labels = [f"[{bins[i]:g} - {bins[i+1]:g})" for i in range(len(bins) - 1)]
+        
         try:
+            # `right=False` creates intervals like [a, b), [b, c), ...
+            # `include_lowest=True` ensures the first value is included in the first bin.
             return pd.cut(series, bins=bins, labels=labels, right=False, include_lowest=True)
         except ValueError as e:
             st.warning(f"Could not apply binning on '{column_name}': {e}. Values might be outside the specified range.")
