@@ -68,7 +68,8 @@ def generate_plot_figures(dataframes, filenames, primary_dim, secondary_dim, y_a
                           show_titles, plot_titles, comparison_mode, show_outliers,
                           fig_size_mode, fig_width_cm, fig_height_cm,
                           axes_label_mode, x_label, y_label,
-                          primary_bin_edges, secondary_bin_edges):
+                          primary_bin_edges, secondary_bin_edges,
+                          primary_dim_order, secondary_dim_order):
     """
     Generates Matplotlib figure objects for each dataframe.
     Returns a list of tuples: (figure, filename).
@@ -84,7 +85,9 @@ def generate_plot_figures(dataframes, filenames, primary_dim, secondary_dim, y_a
             fig = plot_func(modified_df, primary_dim, secondary_dim, y_axis,
                             show_titles, title, show_outliers,
                             fig_size_mode, fig_width_cm, fig_height_cm,
-                            axes_label_mode, x_label, y_label)
+                            axes_label_mode, x_label, y_label,
+                            primary_dim_order=primary_dim_order,
+                            secondary_dim_order=secondary_dim_order)
             figures.append((fig, filename))
         except Exception as e:
             st.error(f"Error generating plot figure for {filename}: {str(e)}")
@@ -100,21 +103,22 @@ def generate_combined_plot_logic(
     fig_size_mode, fig_width_cm, fig_height_cm, output_format, 
     plot_titles, axes_label_mode, x_label, y_label, 
     primary_bin_edges, secondary_bin_edges, combined_plot_title,
-    grid_layout_mode, grid_rows, grid_cols
+    grid_layout_mode, grid_rows, grid_cols,
+    primary_dim_order, secondary_dim_order
 ):
     """
     Generates all plots, combines them into a single grid image, and returns
     the final image object and arguments for a Streamlit download button.
     """
     try:
-        # 1. Generate all plots and store them in memory as PNG buffers
         image_buffers = []
         figures_with_filenames = generate_plot_figures(
             dataframes, filenames, primary_dim, secondary_dim, y_axis,
             show_titles, plot_titles, comparison_mode, show_outliers,
             fig_size_mode, fig_width_cm, fig_height_cm,
             axes_label_mode, x_label, y_label,
-            primary_bin_edges, secondary_bin_edges
+            primary_bin_edges, secondary_bin_edges,
+            primary_dim_order, secondary_dim_order
         )
 
         for fig, _ in figures_with_filenames:

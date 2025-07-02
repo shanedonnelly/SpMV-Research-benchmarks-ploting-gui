@@ -116,7 +116,8 @@ def try_numeric_sort(values):
 
 def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles, title, 
                            show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, fig_height_cm=None,
-                           axes_label_mode="Auto", x_label=None, y_label=None):
+                           axes_label_mode="Auto", x_label=None, y_label=None,
+                           primary_dim_order=None, secondary_dim_order=None):
     """Create side-by-side boxplot visualization"""
     
     # --- Parameter initialization with comments ---
@@ -128,8 +129,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     LINE_WIDTH = 0.8  # Width of lines for boxplots
     
     # Get unique values, filter NaNs, and sort
-    primary_values_unique = _get_unique_values(df[primary_dim])
-    primary_values = try_numeric_sort(primary_values_unique)
+    primary_values = primary_dim_order if primary_dim_order else try_numeric_sort(_get_unique_values(df[primary_dim]))
     num_primary_values = len(primary_values)
     
     # Determine figure size
@@ -143,8 +143,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
         width_per_primary_category = 1.0  # Extra width for each primary category
         
         if secondary_dim:
-            secondary_values_unique = _get_unique_values(df[secondary_dim])
-            secondary_values = try_numeric_sort(secondary_values_unique)
+            secondary_values = secondary_dim_order if secondary_dim_order else try_numeric_sort(_get_unique_values(df[secondary_dim]))
             width_per_primary_category = 0.5 + 0.25 * len(secondary_values)  # Adjust width for secondary categories
         
         fig_width = base_width + num_primary_values * width_per_primary_category
@@ -164,8 +163,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     
     if secondary_dim:
         # Create grouped boxplots colored by secondary dimension
-        secondary_values_unique = _get_unique_values(df[secondary_dim])
-        secondary_values = try_numeric_sort(secondary_values_unique)
+        secondary_values = secondary_dim_order if secondary_dim_order else try_numeric_sort(_get_unique_values(df[secondary_dim]))
         colors = get_pastel_colors(len(secondary_values))
         
         n_sec = len(secondary_values)
@@ -173,7 +171,8 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
             # Fallback if no secondary values found
             return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
                                           show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
-                                          axes_label_mode, x_label, y_label)
+                                          axes_label_mode, x_label, y_label,
+                                          primary_dim_order=primary_dim_order)
 
         # --- New Boxplot Positioning Logic ---
         # Total width for a group of boxes for one primary category
@@ -302,13 +301,15 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
 
 def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, title, 
                        show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, fig_height_cm=None,
-                       axes_label_mode="Auto", x_label=None, y_label=None):
+                       axes_label_mode="Auto", x_label=None, y_label=None,
+                       primary_dim_order=None, secondary_dim_order=None):
     """Create stacked subplot visualization with each secondary value in its own subplot"""
     if not secondary_dim:
         # No secondary dimension, just create a regular boxplot
         return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
                                       show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
-                                      axes_label_mode, x_label, y_label)
+                                      axes_label_mode, x_label, y_label,
+                                      primary_dim_order=primary_dim_order)
     
     # --- Parameter initialization with comments ---
     DPI = 300  # Resolution of the output figure (lower for reasonable file size)
@@ -321,18 +322,16 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
     HSPACE = 0 # Vertical space between subplots
     
     # Get unique values for each dimension, filter NaNs, and sort them
-    primary_values_unique = _get_unique_values(df[primary_dim])
-    secondary_values_unique = _get_unique_values(df[secondary_dim])
-    
-    primary_values = try_numeric_sort(primary_values_unique)
-    secondary_values = try_numeric_sort(secondary_values_unique)
+    primary_values = primary_dim_order if primary_dim_order else try_numeric_sort(_get_unique_values(df[primary_dim]))
+    secondary_values = secondary_dim_order if secondary_dim_order else try_numeric_sort(_get_unique_values(df[secondary_dim]))
     n_subplots = len(secondary_values)
 
     if n_subplots == 0:
         # Handle case where secondary dimension has no valid data
         return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
                                       show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
-                                      axes_label_mode, x_label, y_label)
+                                      axes_label_mode, x_label, y_label,
+                                      primary_dim_order=primary_dim_order)
 
     # Determine figure size
     if fig_size_mode == "Manual" and fig_width_cm and fig_height_cm:

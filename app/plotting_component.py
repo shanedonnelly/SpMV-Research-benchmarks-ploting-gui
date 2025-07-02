@@ -4,7 +4,9 @@ import os
 import io
 import zipfile
 import numpy as np
+import re
 from matplotlib_interface import save_plot_to_buffer
+from streamlit_sortables import sort_items
 
 # Import the new logic functions
 from plotting_logic import (
@@ -13,6 +15,60 @@ from plotting_logic import (
     generate_plot_figures,
     generate_combined_plot_logic
 )
+
+def render_sorting_controls(df, column_name, key_prefix):
+    """Renders a sortable list for categorical column values."""
+    with st.expander(f"Sorting of: `{column_name}`", expanded=True):
+        
+        unique_values_raw = [str(v) for v in df[column_name].unique() if pd.notna(v)]
+
+        # Define a sort key function for numeric-like bins
+        def get_bin_sort_key(value):
+            match = re.match(r'\[(\d+)', str(value).strip())
+            if match:
+                return int(match.group(1))
+            return -1 # Fallback for non-matching items
+
+        # Check if the first item looks like a bin, e.g., "[2-4]"
+        if unique_values_raw and re.match(r'\[\d+', str(unique_values_raw[0]).strip()):
+            try:
+                # If so, attempt to sort numerically based on the bin's start
+                unique_values = sorted(unique_values_raw, key=get_bin_sort_key)
+            except (ValueError, TypeError):
+                # If sorting fails (e.g., mixed formats), fall back to alphabetical
+                unique_values = sorted(unique_values_raw)
+        else:
+            # Default to standard alphabetical sort
+            unique_values = sorted(unique_values_raw)
+        
+        # Custom CSS for the sortable component
+        custom_style = """
+            .sortable-item {
+                background-color: rgb(240, 242, 246);
+                color: black;
+                padding: 5px 10px;
+                margin-bottom: 4px;
+                border-radius: 5px;
+                border: 1px solid #DDD;
+                width: 100%; /* Force item to take full width */
+                box-sizing: border-box; /* Ensure padding doesn't cause overflow */
+            }
+            .sortable-component > div {
+                display: flex;
+                flex-direction: column; /* Stack items vertically */
+            }
+            .sortable-component {
+                padding-right: 2rem;
+            }
+        """
+        
+        sorted_values = sort_items(
+            unique_values, 
+            # The key must be unique to the column to force a refresh on change
+            key=f"sort_{key_prefix}_{column_name}",
+            custom_style=custom_style
+        )
+        return sorted_values
 
 def render_binning_controls(df, column_name, key_prefix):
     """Renders performant sliders and inputs for numerical binning."""
@@ -141,6 +197,22 @@ def render_plotting_component(dataframes, filenames):
                          index=columns.index(default_y) if default_y in columns else 0, 
                          key="y_axis")
     
+    # --- Sorting controls for categorical dimensions ---
+    primary_dim_order = None
+    secondary_dim_order = None
+
+    is_primary_categorical = primary_dim and not is_numerical_column(dataframes[0], primary_dim)
+    is_secondary_categorical = secondary_dim not in [None, "None"] and not is_numerical_column(dataframes[0], secondary_dim)
+
+    if is_primary_categorical or is_secondary_categorical:
+        col1, col2 = st.columns(2)
+        if is_primary_categorical:
+            with col1:
+                primary_dim_order = render_sorting_controls(dataframes[0], primary_dim, "primary_sort")
+        if is_secondary_categorical:
+            with col2:
+                secondary_dim_order = render_sorting_controls(dataframes[0], secondary_dim, "secondary_sort")
+
     # --- Binning controls for numerical dimensions ---
     primary_bin_edges = None
     secondary_bin_edges = None
@@ -293,6 +365,8 @@ def render_plotting_component(dataframes, filenames):
             'y_label': y_label,
             'primary_bin_edges': primary_bin_edges,
             'secondary_bin_edges': secondary_bin_edges,
+            'primary_dim_order': primary_dim_order,
+            'secondary_dim_order': secondary_dim_order,
             'combine_plots': combine_plots,
             'combined_plot_title': combined_plot_title,
             'grid_layout_mode': st.session_state.get('grid_layout_mode', 'Auto'),
@@ -316,7 +390,10 @@ def render_plotting_component(dataframes, filenames):
             'fig_size_mode': fig_size_mode, 'fig_width_cm': fig_width_cm, 'fig_height_cm': fig_height_cm,
             'output_format': output_format, 'plot_titles': plot_titles, 'axes_label_mode': axes_label_mode,
             'x_label': x_label, 'y_label': y_label, 'primary_bin_edges': primary_bin_edges,
-            'secondary_bin_edges': secondary_bin_edges, 'combine_plots': combine_plots,
+            'secondary_bin_edges': secondary_bin_edges,
+            'primary_dim_order': primary_dim_order,
+            'secondary_dim_order': secondary_dim_order,
+            'combine_plots': combine_plots,
             'combined_plot_title': combined_plot_title,
             'grid_layout_mode': st.session_state.get('grid_layout_mode', 'Auto'),
             'grid_rows': st.session_state.get('grid_rows', 1),
@@ -337,6 +414,7 @@ def display_plots(dataframes, filenames, primary_dim, secondary_dim, y_axis,
                   fig_height_cm=None, output_format="PNG", plot_titles=None,
                   axes_label_mode="Auto", x_label=None, y_label=None,
                   primary_bin_edges=None, secondary_bin_edges=None,
+                  primary_dim_order=None, secondary_dim_order=None,
                   combine_plots=False, combined_plot_title="",
                   grid_layout_mode="Auto", grid_rows=3, grid_cols=3):
     """
@@ -353,7 +431,10 @@ def display_plots(dataframes, filenames, primary_dim, secondary_dim, y_axis,
             fig_height_cm=fig_height_cm, output_format=output_format, 
             plot_titles=plot_titles, axes_label_mode=axes_label_mode, 
             x_label=x_label, y_label=y_label, primary_bin_edges=primary_bin_edges, 
-            secondary_bin_edges=secondary_bin_edges, combined_plot_title=combined_plot_title,
+            secondary_bin_edges=secondary_bin_edges,
+            primary_dim_order=primary_dim_order,
+            secondary_dim_order=secondary_dim_order,
+            combined_plot_title=combined_plot_title,
             grid_layout_mode=grid_layout_mode, grid_rows=grid_rows, grid_cols=grid_cols
         )
         return
@@ -367,7 +448,8 @@ def display_plots(dataframes, filenames, primary_dim, secondary_dim, y_axis,
         show_titles, plot_titles, comparison_mode, show_outliers,
         fig_size_mode, fig_width_cm, fig_height_cm,
         axes_label_mode, x_label, y_label,
-        primary_bin_edges, secondary_bin_edges
+        primary_bin_edges, secondary_bin_edges,
+        primary_dim_order, secondary_dim_order
     )
 
     # Now, iterate and display each generated figure
