@@ -323,18 +323,32 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
     st.markdown("""<style> div[data-testid="stButton"] > button { min-width: 48px; } </style>""", unsafe_allow_html=True)
 
     with st.container():
-        to_filter_columns = st.multiselect("Filter dataframe on", df_copy.columns, default=list(st.session_state.previous_columns))
-        
-        active_filter_columns = set(to_filter_columns)
-        removed_cols_from_multiselect = st.session_state.previous_columns - active_filter_columns
-        for col_to_remove_filter_state in removed_cols_from_multiselect:
-            keys_to_delete = [k for k in st.session_state.keys() if k.startswith(f"{col_to_remove_filter_state}_")]
-            for key in keys_to_delete:
-                if key in st.session_state: del st.session_state[key]
-            if col_to_remove_filter_state in st.session_state.filters_applied:
-                del st.session_state.filters_applied[col_to_remove_filter_state]
-        st.session_state.previous_columns = active_filter_columns
-        
+        # Use a key for the multiselect to manage its state reliably
+        if 'to_filter_columns_widget' not in st.session_state:
+            st.session_state.to_filter_columns_widget = list(st.session_state.previous_columns)
+
+        st.multiselect(
+            "Filter dataframe on", 
+            df_copy.columns, 
+            key="to_filter_columns_widget"
+        )
+
+        # Detect changes between the widget's state and our tracked state
+        if st.session_state.to_filter_columns_widget != list(st.session_state.previous_columns):
+            active_filter_columns = set(st.session_state.to_filter_columns_widget)
+            removed_cols = st.session_state.previous_columns - active_filter_columns
+            
+            for col_to_remove in removed_cols:
+                keys_to_delete = [k for k in st.session_state if k.startswith(f"{col_to_remove}_")]
+                for key in keys_to_delete:
+                    del st.session_state[key]
+                if col_to_remove in st.session_state.filters_applied:
+                    del st.session_state.filters_applied[col_to_remove]
+            
+            st.session_state.previous_columns = active_filter_columns
+            st.rerun()
+
+        to_filter_columns = list(st.session_state.previous_columns)
         intermediate_filtered_df = df_copy.copy()
 
         for column in to_filter_columns:
