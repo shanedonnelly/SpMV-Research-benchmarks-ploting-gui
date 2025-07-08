@@ -333,8 +333,8 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
             key="to_filter_columns_widget"
         )
 
-        # Detect changes between the widget's state and our tracked state
-        if st.session_state.to_filter_columns_widget != list(st.session_state.previous_columns):
+        # Detect changes by comparing sets to ignore order differences
+        if set(st.session_state.to_filter_columns_widget) != st.session_state.previous_columns:
             active_filter_columns = set(st.session_state.to_filter_columns_widget)
             removed_cols = st.session_state.previous_columns - active_filter_columns
             
