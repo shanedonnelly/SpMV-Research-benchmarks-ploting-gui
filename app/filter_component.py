@@ -348,7 +348,7 @@ def filter_dataframe(df: pd.DataFrame, max_unique: int = 50, show_df_by_default:
             st.session_state.previous_columns = active_filter_columns
             st.rerun()
 
-        to_filter_columns = list(st.session_state.previous_columns)
+        to_filter_columns = st.session_state.to_filter_columns_widget
         intermediate_filtered_df = df_copy.copy()
 
         for column in to_filter_columns:
