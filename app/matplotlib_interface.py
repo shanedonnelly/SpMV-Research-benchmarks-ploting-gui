@@ -128,8 +128,11 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     FONT_SIZE_LEGEND_TITLE = 14  # Font size for legend title
     LINE_WIDTH = 0.8  # Width of lines for boxplots
     
-    # Get unique values, filter NaNs, and sort
-    primary_values = primary_dim_order if primary_dim_order else try_numeric_sort(_get_unique_values(df[primary_dim]))
+    # Get unique values, filter NaNs, and sort. Use provided order if available.
+    primary_values = try_numeric_sort(_get_unique_values(df[primary_dim]))
+    if primary_dim_order is not None:
+        primary_values = sorted(primary_values, key=lambda x: primary_dim_order.index(x) if x in primary_dim_order else float('inf'))
+
     num_primary_values = len(primary_values)
     
     # Determine figure size
@@ -143,7 +146,10 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
         width_per_primary_category = 1.0  # Extra width for each primary category
         
         if secondary_dim:
-            secondary_values = secondary_dim_order if secondary_dim_order else try_numeric_sort(_get_unique_values(df[secondary_dim]))
+            # Use provided order if available for secondary dimension
+            secondary_values = try_numeric_sort(_get_unique_values(df[secondary_dim]))
+            if secondary_dim_order is not None:
+                secondary_values = sorted(secondary_values, key=lambda x: secondary_dim_order.index(x) if x in secondary_dim_order else float('inf'))
             width_per_primary_category = 0.5 + 0.25 * len(secondary_values)  # Adjust width for secondary categories
         
         fig_width = base_width + num_primary_values * width_per_primary_category
@@ -163,7 +169,9 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     
     if secondary_dim:
         # Create grouped boxplots colored by secondary dimension
-        secondary_values = secondary_dim_order if secondary_dim_order else try_numeric_sort(_get_unique_values(df[secondary_dim]))
+        secondary_values = try_numeric_sort(_get_unique_values(df[secondary_dim]))
+        if secondary_dim_order is not None:
+            secondary_values = sorted(secondary_values, key=lambda x: secondary_dim_order.index(x) if x in secondary_dim_order else float('inf'))
         colors = get_pastel_colors(len(secondary_values))
         
         n_sec = len(secondary_values)
@@ -322,8 +330,14 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
     HSPACE = 0 # Vertical space between subplots
     
     # Get unique values for each dimension, filter NaNs, and sort them
-    primary_values = primary_dim_order if primary_dim_order else try_numeric_sort(_get_unique_values(df[primary_dim]))
-    secondary_values = secondary_dim_order if secondary_dim_order else try_numeric_sort(_get_unique_values(df[secondary_dim]))
+    primary_values = try_numeric_sort(_get_unique_values(df[primary_dim]))
+    if primary_dim_order is not None:
+        primary_values = sorted(primary_values, key=lambda x: primary_dim_order.index(x) if x in primary_dim_order else float('inf'))
+    
+    secondary_values = try_numeric_sort(_get_unique_values(df[secondary_dim]))
+    if secondary_dim_order is not None:
+        secondary_values = sorted(secondary_values, key=lambda x: secondary_dim_order.index(x) if x in secondary_dim_order else float('inf'))
+
     n_subplots = len(secondary_values)
 
     if n_subplots == 0:

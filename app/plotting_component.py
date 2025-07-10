@@ -16,7 +16,7 @@ from plotting_logic import (
     generate_combined_plot_logic
 )
 
-def render_sorting_controls(df, column_name, key_prefix):
+def render_sorting_controls(df, column_name, key_prefix, filename_for_key=""):
     """Renders a sortable list for categorical column values."""
     with st.expander(f"Sorting of: `{column_name}`", expanded=True):
         
@@ -64,8 +64,8 @@ def render_sorting_controls(df, column_name, key_prefix):
         
         sorted_values = sort_items(
             unique_values, 
-            # The key must be unique to the column to force a refresh on change
-            key=f"sort_{key_prefix}_{column_name}",
+            # The key must be unique and change when the underlying data changes
+            key=f"sort_{key_prefix}_{column_name}_{filename_for_key}",
             custom_style=custom_style
         )
         return sorted_values
@@ -208,10 +208,54 @@ def render_plotting_component(dataframes, filenames):
         col1, col2 = st.columns(2)
         if is_primary_categorical:
             with col1:
-                primary_dim_order = render_sorting_controls(dataframes[0], primary_dim, "primary_sort")
+                # Default to the first dataframe
+                df_for_primary_sort = dataframes[0]
+                filename_for_primary_sort = filenames[0]
+
+                if len(dataframes) > 1:
+                    first_df_values = set(v for v in dataframes[0][primary_dim].unique() if pd.notna(v))
+                    is_consistent = all(set(v for v in df[primary_dim].unique() if pd.notna(v)) == first_df_values for df in dataframes[1:])
+                    
+                    if not is_consistent:
+                        selected_filename = st.selectbox(
+                            f"Select subset for '{primary_dim}' sorting",
+                            filenames,
+                            key="primary_sort_subset_selector",
+                            help="Values for this dimension differ across subsets. Select which one to use for sorting."
+                        )
+                        selected_idx = filenames.index(selected_filename)
+                        df_for_primary_sort = dataframes[selected_idx]
+                        filename_for_primary_sort = selected_filename
+                
+                # Get the sort order for the selected subset
+                primary_dim_order = render_sorting_controls(
+                    df_for_primary_sort, primary_dim, "primary_sort", filename_for_primary_sort
+                )
+        
         if is_secondary_categorical:
             with col2:
-                secondary_dim_order = render_sorting_controls(dataframes[0], secondary_dim, "secondary_sort")
+                # Default to the first dataframe
+                df_for_secondary_sort = dataframes[0]
+                filename_for_secondary_sort = filenames[0]
+
+                if len(dataframes) > 1:
+                    first_df_values = set(v for v in dataframes[0][secondary_dim].unique() if pd.notna(v))
+                    is_consistent = all(set(v for v in df[secondary_dim].unique() if pd.notna(v)) == first_df_values for df in dataframes[1:])
+
+                    if not is_consistent:
+                        selected_filename = st.selectbox(
+                            f"Select subset for '{secondary_dim}' sorting",
+                            filenames,
+                            key="secondary_sort_subset_selector",
+                            help="Values for this dimension differ across subsets. Select which one to use for sorting."
+                        )
+                        selected_idx = filenames.index(selected_filename)
+                        df_for_secondary_sort = dataframes[selected_idx]
+                        filename_for_secondary_sort = selected_filename
+
+                secondary_dim_order = render_sorting_controls(
+                    df_for_secondary_sort, secondary_dim, "secondary_sort", filename_for_secondary_sort
+                )
 
     # --- Binning controls for numerical dimensions ---
     primary_bin_edges = None
