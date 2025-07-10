@@ -68,22 +68,17 @@ def _calculate_y_lims_no_outliers(data_groups):
 
     return global_min - margin, global_max + margin
 
-def get_pastel_colors(n):
+def get_colors_from_session(n):
     """
-    Generate a list of pastel colors for the plots
+    Gets the active color palette from session state and cycles through it.
     """
-    base_colors = list(mcolors.TABLEAU_COLORS.values())
-    # Make colors more pastel by mixing with white
-    pastel_colors = []
+    # Default to a failsafe palette if not found in session state
+    active_palette = st.session_state.get('active_color_palette', ['#1f77b4'])
     
-    for i in range(n):
-        color_idx = i % len(base_colors)
-        base_color = np.array(mcolors.to_rgb(base_colors[color_idx]))
-        # Mix with white (0.6 base color, 0.4 white)
-        pastel_color = 0.65 * base_color + 0.35 * np.array([1, 1, 1])
-        pastel_colors.append(tuple(pastel_color))
-    
-    return pastel_colors
+    # Cycle through the palette to get the required number of colors
+    if not active_palette: # Failsafe for empty custom palette
+        return ['#1f77b4'] * n
+    return [active_palette[i % len(active_palette)] for i in range(n)]
 
 def try_numeric_sort(values):
     """
@@ -167,12 +162,12 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     plt.rcParams['boxplot.capprops.linewidth'] = LINE_WIDTH
     plt.rcParams['boxplot.medianprops.linewidth'] = LINE_WIDTH
     
-    if secondary_dim:
+    if secondary_dim and secondary_dim != "None":
         # Create grouped boxplots colored by secondary dimension
         secondary_values = try_numeric_sort(_get_unique_values(df[secondary_dim]))
         if secondary_dim_order is not None:
             secondary_values = sorted(secondary_values, key=lambda x: secondary_dim_order.index(x) if x in secondary_dim_order else float('inf'))
-        colors = get_pastel_colors(len(secondary_values))
+        colors = get_colors_from_session(len(secondary_values))
         
         n_sec = len(secondary_values)
         if n_sec == 0:
@@ -265,7 +260,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
                        medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
         
         # Set consistent colors
-        colors = get_pastel_colors(len(labels))
+        colors = get_colors_from_session(len(labels))
         for i, box in enumerate(bp['boxes']):
             box.set_facecolor(colors[i % len(colors)])
     
@@ -312,7 +307,7 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
                        axes_label_mode="Auto", x_label=None, y_label=None,
                        primary_dim_order=None, secondary_dim_order=None):
     """Create stacked subplot visualization with each secondary value in its own subplot"""
-    if not secondary_dim:
+    if not secondary_dim or secondary_dim == "None":
         # No secondary dimension, just create a regular boxplot
         return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
                                       show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
@@ -382,7 +377,7 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
     plt.rcParams['boxplot.medianprops.linewidth'] = LINE_WIDTH
     
     # Colors for each subplot
-    colors = get_pastel_colors(n_subplots)
+    colors = get_colors_from_session(n_subplots)
     
     # Create boxplots for each secondary dimension value
     for idx, ax in enumerate(axes):

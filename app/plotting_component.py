@@ -7,6 +7,7 @@ import numpy as np
 import re
 from matplotlib_interface import save_plot_to_buffer
 from streamlit_sortables import sort_items
+from coloring_module import render_color_picker_component
 
 # Import the new logic functions
 from plotting_logic import (
@@ -373,28 +374,31 @@ def render_plotting_component(dataframes, filenames):
                 with col2:
                     st.number_input("Columns", min_value=1, value=1, key="grid_cols")
 
-    # Generate plot button with styling
-    st.markdown(
-        """
-        <style>
-        div.stButton > button[kind="primary"] {
-            background-color: #ff4b4b;
-            color: white;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    
+    # --- Binning controls for numerical dimensions ---
+    primary_bin_edges = None
+    secondary_bin_edges = None
+
+    is_primary_numerical = primary_dim and is_numerical_column(dataframes[0], primary_dim)
+    is_secondary_numerical = secondary_dim not in [None, "None"] and is_numerical_column(dataframes[0], secondary_dim)
+
+    if is_primary_numerical or is_secondary_numerical:
+        col1, col2 = st.columns(2)
+        if is_primary_numerical:
+            with col1:
+                primary_bin_edges = render_binning_controls(dataframes[0], primary_dim, "primary_bin")
+        if is_secondary_numerical:
+            with col2:
+                secondary_bin_edges = render_binning_controls(dataframes[0], secondary_dim, "secondary_bin")
+
+    # --- Color Picker Component ---
+    render_color_picker_component()
+
+    # --- Generate Plot Button ---
     if st.button("Generate Plot", key="generate_plot", type="primary"):
-        # Convert secondary_dim to None if "None" is selected
-        secondary_dimension = None if secondary_dim == "None" else secondary_dim
-        
-        st.session_state.last_plot_params = {
-            'dataframes': dataframes,
-            'filenames': filenames,
+        # Store settings in session state to be retrieved on rerun
+        st.session_state.plot_params = {
             'primary_dim': primary_dim,
-            'secondary_dim': secondary_dimension,
+            'secondary_dim': secondary_dim,
             'y_axis': y_axis,
             'show_titles': show_titles,
             'comparison_mode': comparison_mode,
@@ -422,18 +426,33 @@ def render_plotting_component(dataframes, filenames):
             del st.session_state.combined_plot_cache
         if 'combined_plot_cache_key' in st.session_state:
             del st.session_state.combined_plot_cache_key
+        
+        # This is the trigger for the display logic below
+        st.session_state.last_plot_params = st.session_state.plot_params.copy()
+        st.session_state.last_plot_params['dataframes'] = dataframes
+        st.session_state.last_plot_params['filenames'] = filenames
+        # st.rerun() # This line is removed to prevent fast reloads
 
 
     # Show plots if they've been generated and parameters haven't changed
     if 'last_plot_params' in st.session_state:
-        secondary_dimension = None if secondary_dim == "None" else secondary_dim
+        # Build a dictionary of the current UI settings to check for changes
         current_params_check = {
-            'dataframes': dataframes, 'filenames': filenames, 'primary_dim': primary_dim,
-            'secondary_dim': secondary_dimension, 'y_axis': y_axis, 'show_titles': show_titles,
-            'comparison_mode': comparison_mode, 'show_outliers': show_outliers,
-            'fig_size_mode': fig_size_mode, 'fig_width_cm': fig_width_cm, 'fig_height_cm': fig_height_cm,
-            'output_format': output_format, 'plot_titles': plot_titles, 'axes_label_mode': axes_label_mode,
-            'x_label': x_label, 'y_label': y_label, 'primary_bin_edges': primary_bin_edges,
+            'primary_dim': primary_dim,
+            'secondary_dim': secondary_dim,
+            'y_axis': y_axis,
+            'show_titles': show_titles,
+            'comparison_mode': comparison_mode,
+            'show_outliers': show_outliers,
+            'fig_size_mode': fig_size_mode,
+            'fig_width_cm': fig_width_cm,
+            'fig_height_cm': fig_height_cm,
+            'output_format': output_format,
+            'plot_titles': plot_titles,
+            'axes_label_mode': axes_label_mode,
+            'x_label': x_label,
+            'y_label': y_label,
+            'primary_bin_edges': primary_bin_edges,
             'secondary_bin_edges': secondary_bin_edges,
             'primary_dim_order': primary_dim_order,
             'secondary_dim_order': secondary_dim_order,
@@ -444,12 +463,15 @@ def render_plotting_component(dataframes, filenames):
             'grid_cols': st.session_state.get('grid_cols', 1)
         }
         
-        params_for_comparison_current = current_params_check.copy()
+        # Compare current settings with the last generated plot's settings
+        # We exclude dataframes and filenames from comparison as they are not UI elements
+        params_for_comparison_current = current_params_check
         params_for_comparison_last = st.session_state.last_plot_params.copy()
-        del params_for_comparison_current['dataframes']
         del params_for_comparison_last['dataframes']
+        del params_for_comparison_last['filenames']
 
-        if not params_for_comparison_current != params_for_comparison_last:
+        # If nothing has changed, display the plot
+        if params_for_comparison_current == params_for_comparison_last:
             display_plots(**st.session_state.last_plot_params)
 
 def display_plots(dataframes, filenames, primary_dim, secondary_dim, y_axis, 
