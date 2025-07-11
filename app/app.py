@@ -79,21 +79,6 @@ def load_config():
         st.error(f"Error loading configuration: {str(e)}")
         return {'max_unique': 50, 'show_df_by_default': False}
 
-# Save configuration
-def save_config(max_unique, show_df_by_default):
-    config = configparser.ConfigParser()
-    config['General'] = {
-        'max_unique': str(max_unique),
-        'show_df_by_default': str(show_df_by_default)
-    }
-    
-    try:
-        with open('config.ini', 'w') as configfile:
-            config.write(configfile)
-        st.success("Configuration saved successfully!")
-    except Exception as e:
-        st.error(f"Error saving configuration: {str(e)}")
-
 # Get available pickle files
 def get_pickle_files():
     if not os.path.exists('pickle'):
@@ -148,34 +133,6 @@ def save_subset(df, original_name, custom_name=None):
     except Exception as e:
         return False, str(e)
 
-# Settings UI
-def show_settings():
-    st.header("Settings")
-    
-    config_data = load_config()
-    
-    with st.form("config_form"):
-        max_unique = st.number_input(
-            "Maximum number of unique values for categorical filters",
-            min_value=1,
-            max_value=1000,
-            value=config_data['max_unique']
-        )
-        
-        show_df_default = st.checkbox(
-            "Show dataframe by default",
-            value=config_data['show_df_by_default']
-        )
-        
-        if st.form_submit_button("Save Settings"):
-            save_config(max_unique, show_df_default)
-            st.session_state.show_settings = False
-            st.rerun()
-    
-    if st.button("Close"):
-        st.session_state.show_settings = False
-        st.rerun()
-
 # Data Filtering page
 def show_data_filtering():
     config_data = load_config()
@@ -198,23 +155,17 @@ def show_data_filtering():
     if not st.session_state.selected_df_file:
         st.stop()
 
-    # Dataframe selector with properly aligned OK button
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        new_selection = st.selectbox(
-            "Select DataFrame",
-            options=pickle_files,
-            index=pickle_files.index(st.session_state.selected_df_file)
-        )
+    # Dataframe selector
+    new_selection = st.selectbox(
+        "Select DataFrame",
+        options=pickle_files,
+        index=pickle_files.index(st.session_state.selected_df_file)
+    )
 
-    # Add vertical space to align button with dropdown, not label
-    with col2:
-        st.write("")  # Add some vertical space
-        if st.button("OK", key="load_df_button"):
-            if new_selection != st.session_state.selected_df_file:
-                st.session_state.selected_df_file = new_selection
-                st.session_state.current_df = pd.read_pickle(f"pickle/{new_selection}")
-                st.rerun()
+    if new_selection != st.session_state.selected_df_file:
+        st.session_state.selected_df_file = new_selection
+        st.session_state.current_df = pd.read_pickle(f"pickle/{new_selection}")
+        st.rerun()
     
     # Filter component - wrap in a container to constrain width
     with st.container():
@@ -257,24 +208,18 @@ def main():
     setup_application()
     
     # Initialize session state
-    if 'show_settings' not in st.session_state:
-        st.session_state.show_settings = False
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Data Filtering"
     
-    # Show settings dialog if needed
-    if st.session_state.show_settings:
-        show_settings()
-    else:
-        # Simple tab navigation
-        tabs = st.tabs(["Data Filtering", "Plotting"])
+    # Simple tab navigation
+    tabs = st.tabs(["Data Filtering", "Plotting"])
 
-        # Show content based on active tab
-        with tabs[0]:
-            show_data_filtering()
-            
-        with tabs[1]:
-            show_plotting_page()
+    # Show content based on active tab
+    with tabs[0]:
+        show_data_filtering()
+        
+    with tabs[1]:
+        show_plotting_page()
 
 if __name__ == "__main__":
     main()
