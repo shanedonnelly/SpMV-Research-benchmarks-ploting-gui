@@ -178,7 +178,7 @@ def render_plotting_component(dataframes, filenames):
     columns = list(dataframes[0].columns)
     
     # Plot type (disabled for now as we only support boxplots)
-    st.selectbox("Plot Type", ["Boxplot"], key="plot_mode", disabled=True)
+    st.selectbox("Plot Type", ["Boxplot", "Violin Plot"], key="plot_mode")
     
     # Replace multiselect with separate primary and secondary dimension selectors
 
@@ -397,6 +397,7 @@ def render_plotting_component(dataframes, filenames):
     if st.button("Generate Plot", key="generate_plot", type="primary"):
         # Store settings in session state to be retrieved on rerun
         st.session_state.plot_params = {
+            'plot_mode': st.session_state.get('plot_mode', 'Boxplot'),
             'primary_dim': primary_dim,
             'secondary_dim': secondary_dim,
             'y_axis': y_axis,
@@ -438,6 +439,7 @@ def render_plotting_component(dataframes, filenames):
     if 'last_plot_params' in st.session_state:
         # Build a dictionary of the current UI settings to check for changes
         current_params_check = {
+            'plot_mode': st.session_state.get('plot_mode', 'Boxplot'),
             'primary_dim': primary_dim,
             'secondary_dim': secondary_dim,
             'y_axis': y_axis,
@@ -474,7 +476,7 @@ def render_plotting_component(dataframes, filenames):
         if params_for_comparison_current == params_for_comparison_last:
             display_plots(**st.session_state.last_plot_params)
 
-def display_plots(dataframes, filenames, primary_dim, secondary_dim, y_axis, 
+def display_plots(dataframes, filenames, plot_mode, primary_dim, secondary_dim, y_axis, 
                   show_titles=False, comparison_mode="Separate", 
                   show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, 
                   fig_height_cm=None, output_format="PNG", plot_titles=None,
@@ -490,7 +492,7 @@ def display_plots(dataframes, filenames, primary_dim, secondary_dim, y_axis,
     # If combine plots is selected, call the dedicated logic and display function
     if combine_plots and len(dataframes) > 1:
         display_combined_plot(
-            dataframes=dataframes, filenames=filenames, primary_dim=primary_dim, 
+            dataframes=dataframes, filenames=filenames, plot_mode=plot_mode, primary_dim=primary_dim, 
             secondary_dim=secondary_dim, y_axis=y_axis, show_titles=show_titles, 
             comparison_mode=comparison_mode, show_outliers=show_outliers, 
             fig_size_mode=fig_size_mode, fig_width_cm=fig_width_cm, 
@@ -498,56 +500,31 @@ def display_plots(dataframes, filenames, primary_dim, secondary_dim, y_axis,
             plot_titles=plot_titles, axes_label_mode=axes_label_mode, 
             x_label=x_label, y_label=y_label, primary_bin_edges=primary_bin_edges, 
             secondary_bin_edges=secondary_bin_edges,
-            primary_dim_order=primary_dim_order,
-            secondary_dim_order=secondary_dim_order,
-            combined_plot_title=combined_plot_title,
-            grid_layout_mode=grid_layout_mode, grid_rows=grid_rows, grid_cols=grid_cols
+            primary_dim_order=primary_dim_order, secondary_dim_order=secondary_dim_order,
+            combined_plot_title=combined_plot_title, grid_layout_mode=grid_layout_mode, 
+            grid_rows=grid_rows, grid_cols=grid_cols
         )
-        return
-
-    # --- Display individual plots ---
-    plot_buffers = []
-    
-    # Generate all figures first using the logic function
-    figures_with_filenames = generate_plot_figures(
-        dataframes, filenames, primary_dim, secondary_dim, y_axis,
-        show_titles, plot_titles, comparison_mode, show_outliers,
-        fig_size_mode, fig_width_cm, fig_height_cm,
-        axes_label_mode, x_label, y_label,
-        primary_bin_edges, secondary_bin_edges,
-        primary_dim_order, secondary_dim_order
-    )
-
-    # Now, iterate and display each generated figure
-    for file_idx, (fig, filename) in enumerate(figures_with_filenames):
-        if fig is None: # Handle case where figure generation failed
-            continue
-
-        st.markdown(f"### {os.path.splitext(filename)[0]}")
-        
-        # Display the plot
-        st.pyplot(fig)
-        
-        # Create download buffer
-        buffer = save_plot_to_buffer(fig, format=output_format.lower())
-        extension = "pdf" if output_format == "PDF" else "png"
-        plot_buffers.append((buffer, f"{os.path.splitext(filename)[0]}.{extension}"))
-        
-        # Individual download button
-        st.download_button(
-            label=f"download as {output_format.lower()} : {os.path.splitext(filename)[0]}",
-            data=buffer,
-            file_name=f"{os.path.splitext(filename)[0]}_plot.{extension}",
-            mime=f"image/{extension}",
-            key=f"download_plot_{file_idx}"
+    else:
+        display_individual_plots(
+            dataframes=dataframes, filenames=filenames, plot_mode=plot_mode, primary_dim=primary_dim, 
+            secondary_dim=secondary_dim, y_axis=y_axis, show_titles=show_titles, 
+            comparison_mode=comparison_mode, show_outliers=show_outliers, 
+            fig_size_mode=fig_size_mode, fig_width_cm=fig_width_cm, 
+            fig_height_cm=fig_height_cm, output_format=output_format, 
+            plot_titles=plot_titles, axes_label_mode=axes_label_mode, 
+            x_label=x_label, y_label=y_label, primary_bin_edges=primary_bin_edges, 
+            secondary_bin_edges=secondary_bin_edges,
+            primary_dim_order=primary_dim_order, secondary_dim_order=secondary_dim_order
         )
-    
-    # Add zip download option if multiple plots were successful
-    if len(plot_buffers) > 1:
-        create_zip_download(plot_buffers, output_format.lower())
 
-
-def display_combined_plot(dataframes, filenames, **kwargs):
+def display_combined_plot(dataframes, filenames, plot_mode, primary_dim, secondary_dim, y_axis,
+                          show_titles, comparison_mode, show_outliers, 
+                          fig_size_mode, fig_width_cm, fig_height_cm, output_format, 
+                          plot_titles, axes_label_mode, x_label, y_label, 
+                          primary_bin_edges, secondary_bin_edges,
+                          primary_dim_order, secondary_dim_order,
+                          combine_plots=False, combined_plot_title="",
+                          grid_layout_mode="Auto", grid_rows=3, grid_cols=3):
     """
     Handles the logic for displaying a combined plot, including caching.
     """
@@ -559,7 +536,7 @@ def display_combined_plot(dataframes, filenames, **kwargs):
     # We now convert mutable items to their immutable, hashable counterparts.
     hashable_items = []
     # Sort by key to ensure the order is always consistent
-    for key, value in sorted(kwargs.items()):
+    for key, value in sorted(locals().items()):
         if isinstance(value, dict):
             # Convert dict to a frozenset of its items
             hashable_items.append((key, frozenset(value.items())))
@@ -587,7 +564,15 @@ def display_combined_plot(dataframes, filenames, **kwargs):
         final_image, download_args = generate_combined_plot_logic(
             dataframes=dataframes,
             filenames=filenames,
-            **kwargs
+            plot_mode=plot_mode, primary_dim=primary_dim, secondary_dim=secondary_dim, y_axis=y_axis, 
+            show_titles=show_titles, comparison_mode=comparison_mode, show_outliers=show_outliers, 
+            fig_size_mode=fig_size_mode, fig_width_cm=fig_width_cm, fig_height_cm=fig_height_cm,
+            output_format=output_format, plot_titles=plot_titles, axes_label_mode=axes_label_mode, 
+            x_label=x_label, y_label=y_label, primary_bin_edges=primary_bin_edges, 
+            secondary_bin_edges=secondary_bin_edges,
+            combined_plot_title=combined_plot_title, grid_layout_mode=grid_layout_mode, 
+            grid_rows=grid_rows, grid_cols=grid_cols,
+            primary_dim_order=primary_dim_order, secondary_dim_order=secondary_dim_order
         )
 
         if final_image and download_args:
@@ -602,18 +587,59 @@ def display_combined_plot(dataframes, filenames, **kwargs):
                 'download_args': download_args
             }
 
-def create_zip_download(plot_buffers, format='png'):
-    """Create a ZIP file containing all plots"""
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'a', zipfile.ZIP_DEFLATED) as zip_file:
-        for buffer, name in plot_buffers:
-            zip_file.writestr(name, buffer.getvalue())
-    
-    zip_buffer.seek(0)
-    st.download_button(
-        label=f"download all as {format}",
-        data=zip_buffer,
-        file_name=f"all_plots.zip",
-        mime="application/zip",
-        key="download_all_plots"
+def display_individual_plots(dataframes, filenames, plot_mode, primary_dim, secondary_dim, y_axis,
+                             show_titles, comparison_mode, show_outliers, 
+                             fig_size_mode, fig_width_cm, fig_height_cm, output_format, 
+                             plot_titles, axes_label_mode, x_label, y_label,
+                             primary_bin_edges, secondary_bin_edges,
+                             primary_dim_order, secondary_dim_order):
+    """
+    Generates and displays plots for each dataframe individually.
+    """
+    figures_with_filenames = generate_plot_figures(
+        dataframes, filenames, plot_mode, primary_dim, secondary_dim, y_axis,
+        show_titles, plot_titles, comparison_mode, show_outliers,
+        fig_size_mode, fig_width_cm, fig_height_cm,
+        axes_label_mode, x_label, y_label,
+        primary_bin_edges, secondary_bin_edges,
+        primary_dim_order, secondary_dim_order
     )
+
+    # Display plots in columns
+    if figures_with_filenames:
+        
+        # Create a zip buffer for download all button
+        zip_buffer = io.BytesIO()
+        
+        cols = st.columns(min(3, len(figures_with_filenames)))
+        for i, (fig, filename) in enumerate(figures_with_filenames):
+            if fig:
+                with cols[i % len(cols)]:
+                    st.pyplot(fig, use_container_width=True)
+                    
+                    # Save plot to a buffer for download
+                    buffer = save_plot_to_buffer(fig, format=output_format.lower())
+                    
+                    # Add to zip file
+                    with zipfile.ZipFile(zip_buffer, 'a', zipfile.ZIP_DEFLATED, False) as zf:
+                        file_extension = "pdf" if output_format.lower() == "pdf" else "png"
+                        zf.writestr(f"{os.path.splitext(filename)[0]}.{file_extension}", buffer.getvalue())
+
+                    # Individual download button
+                    st.download_button(
+                        label=f"Download {os.path.splitext(filename)[0]}",
+                        data=buffer,
+                        file_name=f"{os.path.splitext(filename)[0]}.{output_format.lower()}",
+                        mime=f"image/{output_format.lower()}",
+                        key=f"download_{i}"
+                    )
+        
+        # Add a "Download All" button if there's more than one plot
+        if len(figures_with_filenames) > 1:
+            st.download_button(
+                label="Download All as ZIP",
+                data=zip_buffer.getvalue(),
+                file_name="plots.zip",
+                mime="application/zip",
+                key="download_all"
+            )

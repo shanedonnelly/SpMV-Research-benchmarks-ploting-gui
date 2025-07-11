@@ -112,8 +112,8 @@ def try_numeric_sort(values):
 def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles, title, 
                            show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, fig_height_cm=None,
                            axes_label_mode="Auto", x_label=None, y_label=None,
-                           primary_dim_order=None, secondary_dim_order=None):
-    """Create side-by-side boxplot visualization"""
+                           primary_dim_order=None, secondary_dim_order=None, plot_mode="Boxplot"):
+    """Create side-by-side boxplot or violinplot visualization"""
     
     # --- Parameter initialization with comments ---
     DPI = 300  # Resolution of the output figure (lower for reasonable file size)
@@ -163,7 +163,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
     plt.rcParams['boxplot.medianprops.linewidth'] = LINE_WIDTH
     
     if secondary_dim and secondary_dim != "None":
-        # Create grouped boxplots colored by secondary dimension
+        # Create grouped plots colored by secondary dimension
         secondary_values = try_numeric_sort(_get_unique_values(df[secondary_dim]))
         if secondary_dim_order is not None:
             secondary_values = sorted(secondary_values, key=lambda x: secondary_dim_order.index(x) if x in secondary_dim_order else float('inf'))
@@ -175,58 +175,67 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
             return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
                                           show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
                                           axes_label_mode, x_label, y_label,
-                                          primary_dim_order=primary_dim_order)
+                                          primary_dim_order=primary_dim_order,
+                                          plot_mode=plot_mode)
 
-        # --- New Boxplot Positioning Logic ---
-        # Total width for a group of boxes for one primary category
+        # --- New Plotting Positioning Logic ---
+        # Total width for a group of plots for one primary category
         total_group_width = 0.8 
-        # Width of a single box, adjusted for the number of secondary categories
-        box_width = total_group_width / n_sec
+        # Width of a single plot, adjusted for the number of secondary categories
+        plot_width = total_group_width / n_sec
         
         positions = []
         data = []
-        box_indices = {}  # Map to track box indices
+        plot_indices = {}  # Map to track plot indices
         
         # The positions for the primary categories (e.g., 0, 1, 2, ...)
         primary_positions = np.arange(len(primary_values))
 
         for i, prim_val in enumerate(primary_values):
-            # Calculate the offset for each secondary box from the center of the primary position
+            # Calculate the offset for each secondary plot from the center of the primary position
             for j, sec_val in enumerate(secondary_values):
                 subset = df[(df[primary_dim] == prim_val) & (df[secondary_dim] == sec_val)]
                 if not subset.empty:
-                    # Calculate position for this specific box
-                    # The term (j - (n_sec - 1) / 2.0) centers the group of boxes around 0
-                    offset = (j - (n_sec - 1) / 2.0) * box_width
+                    # Calculate position for this specific plot
+                    # The term (j - (n_sec - 1) / 2.0) centers the group of plots around 0
+                    offset = (j - (n_sec - 1) / 2.0) * plot_width
                     pos = primary_positions[i] + offset
                     
                     positions.append(pos)
                     data.append(subset[y_axis].values)
-                    box_indices[(i, j)] = len(positions) - 1
+                    plot_indices[(i, j)] = len(positions) - 1
         
-        # Create boxplot with outlier option and black median line
+        # Create plot with outlier option and black median line
         data = [d for d in data if len(d) > 0]  # Ensure data is not empty
         if not data:
             st.warning(f"No data to plot for the selected combination")
             # Return an empty figure if no data
             return fig
         
-        # Use a width slightly smaller than box_width to create a gap
-        bp = ax.boxplot(data, positions=positions, patch_artist=True, 
-                       labels=[""] * len(positions), widths=box_width * 0.9,
-                       showfliers=show_outliers,
-                       medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
+        # Use a width slightly smaller than plot_width to create a gap
+        if plot_mode == "Violin Plot":
+            vp = ax.violinplot(data, positions=positions, widths=plot_width * 0.9,
+                               showmeans=False, showmedians=True, showextrema=True)
+        else: # Default to Boxplot
+            bp = ax.boxplot(data, positions=positions, patch_artist=True, 
+                           labels=[""] * len(positions), widths=plot_width * 0.9,
+                           showfliers=show_outliers,
+                           medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
         
         # Set primary dimension tick positions and labels to the center of each group
         ax.set_xticks(primary_positions)
         ax.set_xticklabels(primary_values)
         
-        # Color boxes by secondary dimension
+        # Color plots by secondary dimension
         for j, sec_val in enumerate(secondary_values):
             for i, prim_val in enumerate(primary_values):
-                if (i, j) in box_indices:
-                    idx = box_indices[(i, j)]
-                    bp['boxes'][idx].set_facecolor(colors[j])
+                if (i, j) in plot_indices:
+                    idx = plot_indices[(i, j)]
+                    if plot_mode == "Violin Plot":
+                        vp['bodies'][idx].set_facecolor(colors[j])
+                        vp['bodies'][idx].set_edgecolor('black')
+                    else:
+                        bp['boxes'][idx].set_facecolor(colors[j])
         
         # --- New Legend Positioning ---
         legend_elements = [
@@ -239,7 +248,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
                   fontsize=FONT_SIZE_LEGEND, title_fontsize=FONT_SIZE_LEGEND_TITLE)
         
     else:
-        # Simple boxplot with primary dimension only
+        # Simple plot with primary dimension only
         # primary_values is already sorted from above
         grouped_data = []
         labels = []
@@ -255,17 +264,30 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
             # Return an empty figure if no data
             return fig
             
-        # Create boxplot with outlier option and black median line
-        bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True, showfliers=show_outliers,
-                       medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
+        # Create plot with outlier option and black median line
+        if plot_mode == "Violin Plot":
+            vp = ax.violinplot(grouped_data, showmeans=False, showmedians=True, showextrema=True)
+            ax.set_xticks(np.arange(1, len(labels) + 1))
+            ax.set_xticklabels(labels)
+            
+            
+        else:
+            bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True, showfliers=show_outliers,
+                           medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
         
         # Set consistent colors
         colors = get_colors_from_session(len(labels))
-        for i, box in enumerate(bp['boxes']):
-            box.set_facecolor(colors[i % len(colors)])
+        if plot_mode == "Violin Plot":
+            for i, body in enumerate(vp['bodies']):
+                body.set_facecolor(colors[i % len(colors)])
+                # body.set_edgecolor('black')
+                body.set_alpha(0.8)  # Set alpha for violin plots
+        else:
+            for i, box in enumerate(bp['boxes']):
+                box.set_facecolor(colors[i % len(colors)])
     
-    # Adjust y-axis limits if outliers are not shown
-    if not show_outliers:
+    # Adjust y-axis limits if outliers are not shown (only for boxplot)
+    if not show_outliers and plot_mode == "Boxplot":
         data_for_limits = data if secondary_dim else grouped_data
         min_y, max_y = _calculate_y_lims_no_outliers(data_for_limits)
         if min_y is not None and max_y is not None:
@@ -305,21 +327,22 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
 def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, title, 
                        show_outliers=False, fig_size_mode="Auto", fig_width_cm=None, fig_height_cm=None,
                        axes_label_mode="Auto", x_label=None, y_label=None,
-                       primary_dim_order=None, secondary_dim_order=None):
+                       primary_dim_order=None, secondary_dim_order=None, plot_mode="Boxplot"):
     """Create stacked subplot visualization with each secondary value in its own subplot"""
     if not secondary_dim or secondary_dim == "None":
-        # No secondary dimension, just create a regular boxplot
+        # No secondary dimension, just create a regular plot
         return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
                                       show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
                                       axes_label_mode, x_label, y_label,
-                                      primary_dim_order=primary_dim_order)
+                                      primary_dim_order=primary_dim_order,
+                                      plot_mode=plot_mode)
     
     # --- Parameter initialization with comments ---
     DPI = 300  # Resolution of the output figure (lower for reasonable file size)
     FONT_SIZE_AXIS = 14  # Font size for axis labels
     FONT_SIZE_TITLE = 16  # Font size for plot title
-    FONT_SIZE_LEGEND = 12  # Font size for legend text
-    FONT_SIZE_LEGEND_TITLE = 14  # Font size for legend title
+    FONT_SIZE_LEGEND = 16  # Font size for legend text
+    FONT_SIZE_LEGEND_TITLE = 18  # Font size for legend title
     LINE_WIDTH = 0.8  # Width of lines for boxplots
     SUBPLOT_HEIGHT = 3.2  # Height per subplot (adjusted to be less tall but still adequate)
     HSPACE = 0 # Vertical space between subplots
@@ -340,7 +363,8 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
         return create_side_by_side_plot(df, primary_dim, None, y_axis, show_titles, title, 
                                       show_outliers, fig_size_mode, fig_width_cm, fig_height_cm,
                                       axes_label_mode, x_label, y_label,
-                                      primary_dim_order=primary_dim_order)
+                                      primary_dim_order=primary_dim_order,
+                                      plot_mode=plot_mode)
 
     # Determine figure size
     if fig_size_mode == "Manual" and fig_width_cm and fig_height_cm:
@@ -379,7 +403,7 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
     # Colors for each subplot
     colors = get_colors_from_session(n_subplots)
     
-    # Create boxplots for each secondary dimension value
+    # Create plots for each secondary dimension value
     for idx, ax in enumerate(axes):
         # sec_val corresponds to the axis index (since both are sorted ascending)
         sec_val = secondary_values[idx]
@@ -409,20 +433,28 @@ def create_stacked_plots(df, primary_dim, secondary_dim, y_axis, show_titles, ti
             if all(len(data) == 0 for data in grouped_data):
                 continue
                 
-            # Create boxplot with outlier option and black median line
+            # Create plot with outlier option and black median line
             try:
-                bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True, showfliers=show_outliers,
-                              medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
-                
-                # Color the boxes
-                for box in bp['boxes']:
-                    box.set_facecolor(color)
+                if plot_mode == "Violin Plot":
+                    vp = ax.violinplot(grouped_data, showmeans=False, showmedians=True, showextrema=True)
+                    for i, body in enumerate(vp['bodies']):
+                        body.set_facecolor(color)
+                        body.set_edgecolor('black')
+                    ax.set_xticks(np.arange(1, len(labels) + 1))
+                    ax.set_xticklabels(labels)
+                else:
+                    bp = ax.boxplot(grouped_data, labels=labels, patch_artist=True, showfliers=show_outliers,
+                                  medianprops={'color': 'black', 'linewidth': LINE_WIDTH})
+                    
+                    # Color the boxes
+                    for box in bp['boxes']:
+                        box.set_facecolor(color)
             except (ValueError, TypeError) as e:
-                st.warning(f"Could not create boxplot for {sec_val}: {e}")
+                st.warning(f"Could not create plot for {sec_val}: {e}")
                 continue
             
             # Set y-axis limits based on this subplot's data only
-            if not show_outliers:
+            if not show_outliers and plot_mode == "Boxplot":
                 # Calculate limits based on whiskers if outliers are hidden
                 min_y, max_y = _calculate_y_lims_no_outliers(grouped_data)
                 if min_y is not None and max_y is not None:

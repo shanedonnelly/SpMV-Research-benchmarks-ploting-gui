@@ -64,7 +64,7 @@ def preprocess_data(df, primary_dim, secondary_dim, primary_bin_edges=None, seco
 
 # --- Plot Generation Logic ---
 
-def generate_plot_figures(dataframes, filenames, primary_dim, secondary_dim, y_axis,
+def generate_plot_figures(dataframes, filenames, plot_mode, primary_dim, secondary_dim, y_axis,
                           show_titles, plot_titles, comparison_mode, show_outliers,
                           fig_size_mode, fig_width_cm, fig_height_cm,
                           axes_label_mode, x_label, y_label,
@@ -87,7 +87,8 @@ def generate_plot_figures(dataframes, filenames, primary_dim, secondary_dim, y_a
                             fig_size_mode, fig_width_cm, fig_height_cm,
                             axes_label_mode, x_label, y_label,
                             primary_dim_order=primary_dim_order,
-                            secondary_dim_order=secondary_dim_order)
+                            secondary_dim_order=secondary_dim_order,
+                            plot_mode=plot_mode)
             figures.append((fig, filename))
         except Exception as e:
             st.error(f"Error generating plot figure for {filename}: {str(e)}")
@@ -98,7 +99,7 @@ def generate_plot_figures(dataframes, filenames, primary_dim, secondary_dim, y_a
 
 
 def generate_combined_plot_logic(
-    dataframes, filenames, primary_dim, secondary_dim, y_axis, 
+    dataframes, filenames, plot_mode, primary_dim, secondary_dim, y_axis, 
     show_titles, comparison_mode, show_outliers, 
     fig_size_mode, fig_width_cm, fig_height_cm, output_format, 
     plot_titles, axes_label_mode, x_label, y_label, 
@@ -113,7 +114,7 @@ def generate_combined_plot_logic(
     try:
         image_buffers = []
         figures_with_filenames = generate_plot_figures(
-            dataframes, filenames, primary_dim, secondary_dim, y_axis,
+            dataframes, filenames, plot_mode, primary_dim, secondary_dim, y_axis,
             show_titles, plot_titles, comparison_mode, show_outliers,
             fig_size_mode, fig_width_cm, fig_height_cm,
             axes_label_mode, x_label, y_label,
