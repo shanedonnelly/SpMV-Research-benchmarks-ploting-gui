@@ -281,7 +281,7 @@ def create_side_by_side_plot(df, primary_dim, secondary_dim, y_axis, show_titles
             for i, body in enumerate(vp['bodies']):
                 body.set_facecolor(colors[i % len(colors)])
                 # body.set_edgecolor('black')
-                body.set_alpha(0.8)  # Set alpha for violin plots
+                body.set_alpha(1.0)  # Set alpha for violin plots
         else:
             for i, box in enumerate(bp['boxes']):
                 box.set_facecolor(colors[i % len(colors)])
